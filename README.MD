@@ -4,6 +4,6 @@
 
 | Name | Email | FIM ID |
 | ---- | ----- | ------ |
-|      |       |        |
+|Haidar Chaito|chaito01@ads.uni-passau.de|chaito|
 |      |       |        |
 |      |       |        |
