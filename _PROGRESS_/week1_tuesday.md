@@ -8,3 +8,6 @@
 | Implement model correction method for the pipeline                     | Haidar Chaito       |               | Completed  |
 | Create gitlab CI that automate the test and coverage                   | Haidar Chaito       |               | Completed  |
 | Create Documentation for the project structure                         | Haidar Chaito       |               | Completed  |
+| Setup the Django backend with needed endpionts                         | Noureddine       |               | Completed  |
+| Integrate the model pipline into the backend                         | Noureddine       |               | Completed  |
+| write units tests for the backend                         | Noureddine       |               | Completed  |
