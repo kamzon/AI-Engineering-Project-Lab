@@ -1,2 +1,69 @@
 /venv
 sam_vit_b_01ec64.pth
+
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment
+env/
+.venv/
+venv/
+ENV/
+
+# Django stuff:
+*.log
+*.pot
+*.pyc
+*.sqlite3
+db.sqlite3
+db.sqlite3-journal
+
+# Media / uploads
+var/media/
+media/
+
+# Static files (can be rebuilt)
+staticfiles/
+static/
+
+# Django local settings
+local_settings.py
+
+# IDEs / editors
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# MacOS
+.DS_Store
+
+# Python packaging
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+*.whl
+
+# Testing
+.coverage
+.tox/
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# MyPy / type checking
+.mypy_cache/
+.dmypy.json
+
+# Logs
+*.log
+
+# Misc
+*.swp
