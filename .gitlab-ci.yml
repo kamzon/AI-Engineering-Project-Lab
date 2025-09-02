@@ -1,35 +1,36 @@
-# stages:
-#   - test
+stages:
+  - test
 
-# test:
-#   image: python:3.12-slim
-#   stage: test
-#   variables:
-#     PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
-#   cache:
-#     key: "$CI_COMMIT_REF_SLUG"
-#     paths:
-#       - .cache/pip
-#   before_script:
-#     - python --version
-#     - pip install --upgrade pip setuptools wheel
-#     - pip install -r pipeline/requirements.txt
-#     - pip install -r ai_app/requirements.txt
-#     - pip install coverage
-#   script:
-#     - cd ai_app
-#     - coverage run --source='.' manage.py test | cat
-#     - coverage xml -o coverage.xml
-#     - coverage html
-#     - coverage report -m | cat
-#   artifacts:
-#     when: always
-#     paths:
-#       - ai_app/coverage.xml
-#       - ai_app/htmlcov/
-#     reports:
-#       coverage_report:
-#         coverage_format: cobertura
-#         path: ai_app/coverage.xml
-#   tags:
-#     - test
+test:
+  image: python:3.12-slim
+  stage: test
+  variables:
+    PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+  cache:
+    key: "$CI_COMMIT_REF_SLUG"
+    paths:
+      - .cache/pip
+  before_script:
+    - python --version
+    - apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
+    - pip install --upgrade pip setuptools wheel
+    - pip install -r pipeline/requirements.txt
+    - pip install -r ai_app/requirements.txt
+    - pip install coverage
+  script:
+    - cd ai_app
+    - coverage run --source='.' manage.py test | cat
+    - coverage xml -o coverage.xml
+    - coverage html
+    - coverage report -m | cat
+  artifacts:
+    when: always
+    paths:
+      - ai_app/coverage.xml
+      - ai_app/htmlcov/
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: ai_app/coverage.xml
+  tags:
+    - test
