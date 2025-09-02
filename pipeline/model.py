@@ -55,6 +55,7 @@ class SamSegmentationClassifier:
         background_fill: int = 188,
         device: Optional[str] = None,
         show_plots: bool = False,
+        candidate_labels: Optional[List[str]] = None,
     ) -> None:
         self.image_path = image_path
         self.top_n = top_n
@@ -65,6 +66,7 @@ class SamSegmentationClassifier:
         self.background_fill = background_fill
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         self.show_plots = show_plots
+        self.candidate_labels = candidate_labels
 
         self._image: Optional[Image.Image] = None
         self._image_tensor: Optional[torch.Tensor] = None
@@ -213,11 +215,44 @@ class SamSegmentationClassifier:
         assert self._predicted_classes is not None
         for predicted_class in self._predicted_classes:
             result = zshot(
-                predicted_class, candidate_labels=ModelConstants.DEFAULT_CANDIDATE_LABELS
+                predicted_class, candidate_labels=self.candidate_labels or ModelConstants.DEFAULT_CANDIDATE_LABELS
             )
             labels.append(result["labels"][0])
         self._zero_shot_labels = labels
         return labels
+
+    def correct_predictions(
+        self,
+        classes: Optional[Dict[int, str]] = None,
+        labels: Optional[Dict[int, str]] = None,
+    ) -> Dict[str, Any]:
+        if self._segments is None:
+            raise ValueError("No segments available. Run the pipeline first.")
+
+        if self._predicted_classes is None:
+            self.classify_segments()
+        if self._zero_shot_labels is None:
+            self._zero_shot_labels = ["" for _ in range(len(self._segments))]
+
+        if classes:
+            for idx, value in classes.items():
+                if idx < 0 or idx >= len(self._segments):
+                    raise IndexError(f"Segment index out of range: {idx}")
+                self._predicted_classes[idx] = value
+
+        if labels:
+            for idx, value in labels.items():
+                if idx < 0 or idx >= len(self._segments):
+                    raise IndexError(f"Segment index out of range: {idx}")
+                self._zero_shot_labels[idx] = value
+
+        return {
+            "image": self._image,
+            "panoptic_map": self._panoptic_map,
+            "segments": self._segments,
+            "predicted_classes": self._predicted_classes,
+            "zero_shot_labels": self._zero_shot_labels,
+        }
 
     def plot_original_and_panoptic(self) -> None:
         if self._panoptic_map is None:
