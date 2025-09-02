@@ -44,7 +44,7 @@ class SamSegmentationClassifier:
         background_fill: int = 188,
         device: Optional[str] = None,
         show_plots: bool = False,
-        candidate_labels: Optional[List[str]] = [],
+        candidate_labels: List[str] = [],
     ) -> None:
         self.image_path = image_path
         self.top_n = top_n
@@ -292,9 +292,9 @@ class SamSegmentationClassifier:
             self.plot_segments()
 
         return {
-            "image": self._image,
-            "panoptic_map": self._panoptic_map,
-            "segments": self._segments,
+            # "image": self._image,
+            # "panoptic_map": self._panoptic_map,
+            # "segments": self._segments,
             "predicted_classes": self._predicted_classes,
             "zero_shot_labels": self._zero_shot_labels,
         }
@@ -303,4 +303,5 @@ class SamSegmentationClassifier:
 if __name__ == "__main__":
     pipeline_runner = SamSegmentationClassifier()
     pipeline_runner.image_path = "pipeline/inputs/image.png"
-    pipeline_runner.run()
+    pipeline_runner.candidate_labels = ['cat']
+    print(pipeline_runner.run())
