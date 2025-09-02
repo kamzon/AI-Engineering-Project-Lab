@@ -46,7 +46,7 @@ class SamSegmentationClassifier:
 
     def __init__(
         self,
-        image_path: str,
+        image_path: str = "pipeline/inputs/image.png",
         top_n: int = 10,
         points_per_side: int = 16,
         pred_iou_thresh: float = 0.7,
@@ -277,8 +277,6 @@ class SamSegmentationClassifier:
 
 
 if __name__ == "__main__":
-    pipeline_runner = SamSegmentationClassifier(
-        image_path="pipeline/inputs/image.png",
-        show_plots=False,
-    )
+    pipeline_runner = SamSegmentationClassifier()
+    pipeline_runner.image_path = "pipeline/inputs/image.png"
     pipeline_runner.run()
