@@ -28,6 +28,8 @@ test:
       - ai_app/coverage.xml
       - ai_app/htmlcov/
     reports:
-      cobertura: ai_app/coverage.xml
+      coverage_report:
+        coverage_format: cobertura
+        path: ai_app/coverage.xml
   tags:
     - test
