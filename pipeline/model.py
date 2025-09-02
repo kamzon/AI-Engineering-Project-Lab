@@ -29,17 +29,6 @@ class ModelConstants:
 
     # Zero-shot classification
     ZERO_SHOT_MODEL_ID: str = "typeform/distilbert-base-uncased-mnli"
-    DEFAULT_CANDIDATE_LABELS = [
-        "car",
-        "cat",
-        "tree",
-        "dog",
-        "building",
-        "person",
-        "sky",
-        "ground",
-        "hardware",
-    ]
 
 
 class SamSegmentationClassifier:
@@ -55,7 +44,7 @@ class SamSegmentationClassifier:
         background_fill: int = 188,
         device: Optional[str] = None,
         show_plots: bool = False,
-        candidate_labels: Optional[List[str]] = None,
+        candidate_labels: Optional[List[str]] = [],
     ) -> None:
         self.image_path = image_path
         self.top_n = top_n
@@ -215,7 +204,7 @@ class SamSegmentationClassifier:
         assert self._predicted_classes is not None
         for predicted_class in self._predicted_classes:
             result = zshot(
-                predicted_class, candidate_labels=self.candidate_labels or ModelConstants.DEFAULT_CANDIDATE_LABELS
+                predicted_class, candidate_labels=self.candidate_labels
             )
             labels.append(result["labels"][0])
         self._zero_shot_labels = labels
