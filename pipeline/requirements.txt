@@ -2,6 +2,7 @@ accelerate==1.10.0
 aiohappyeyeballs==2.6.1
 aiohttp==3.12.15
 aiosignal==1.4.0
+appnope==0.1.4
 asttokens==3.0.0
 attrs==25.3.0
 certifi==2025.7.14
@@ -76,14 +77,15 @@ rpds-py==0.27.0
 safetensors==0.5.3
 scikit-image==0.25.2
 scipy==1.15.3
-# segment-anything==1.0
+segment_anything @ git+https://github.com/facebookresearch/segment-anything.git@dca509fe793f601edb92606367a655c15ac00fdf
+setuptools==80.9.0
 six==1.17.0
 stack-data==0.6.3
 sympy==1.13.3
 tifffile==2025.6.11
 tokenizers==0.21.4
-# torch==2.8.0+cpu
-# torchvision==0.23.0+cpu
+torch==2.8.0
+torchvision==0.23.0
 tornado==6.5.1
 tqdm==4.67.1
 traitlets==5.14.3

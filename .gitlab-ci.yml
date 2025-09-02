@@ -2,8 +2,32 @@ stages:
   - test
 
 test:
+  image: python:3.12-slim
   stage: test
+  variables:
+    PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+  cache:
+    key: "$CI_COMMIT_REF_SLUG"
+    paths:
+      - .cache/pip
+  before_script:
+    - python --version
+    - pip install --upgrade pip setuptools wheel
+    - pip install -r pipeline/requirements.txt
+    - pip install -r ai_app/requirements.txt
+    - pip install coverage
   script:
-    - echo "Running tests..."
+    - cd ai_app
+    - coverage run --source='.' manage.py test | cat
+    - coverage xml -o coverage.xml
+    - coverage html
+    - coverage report -m | cat
+  artifacts:
+    when: always
+    paths:
+      - ai_app/coverage.xml
+      - ai_app/htmlcov/
+    reports:
+      cobertura: ai_app/coverage.xml
   tags:
     - test
