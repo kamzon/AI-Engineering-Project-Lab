@@ -27,6 +27,18 @@ class ModelConstants:
     # Image classification
     IMAGE_MODEL_ID: str = "microsoft/resnet-50"
 
+    DEFAULT_CANDIDATE_LABELS: List[str] = [
+        "car",
+        "cat",
+        "tree",
+        "dog",
+        "building",
+        "person",
+        "sky",
+        "ground",
+        "hardware",
+    ]
+
     # Zero-shot classification
     ZERO_SHOT_MODEL_ID: str = "typeform/distilbert-base-uncased-mnli"
 
@@ -44,7 +56,6 @@ class SamSegmentationClassifier:
         background_fill: int = 188,
         device: Optional[str] = None,
         show_plots: bool = False,
-        candidate_labels: List[str] = [],
     ) -> None:
         self.image_path = image_path
         self.top_n = top_n
@@ -55,7 +66,7 @@ class SamSegmentationClassifier:
         self.background_fill = background_fill
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         self.show_plots = show_plots
-        self.candidate_labels = candidate_labels
+        self.candidate_labels = ModelConstants.DEFAULT_CANDIDATE_LABELS
 
         self._image: Optional[Image.Image] = None
         self._image_tensor: Optional[torch.Tensor] = None
@@ -210,6 +221,17 @@ class SamSegmentationClassifier:
         self._zero_shot_labels = labels
         return labels
 
+    def count_candidate_labels(self) -> Dict[str, int]:
+        if not self.candidate_labels:
+            return {}
+        if self._zero_shot_labels is None:
+            self.zero_shot_labels()
+        assert self._zero_shot_labels is not None
+        return {
+            label: sum(1 for l in self._zero_shot_labels if l == label)
+            for label in self.candidate_labels
+        }
+
     def correct_predictions(
         self,
         classes: Optional[Dict[int, str]] = None,
@@ -291,17 +313,18 @@ class SamSegmentationClassifier:
             self.plot_original_and_panoptic()
             self.plot_segments()
 
-        return {
+        result: Dict[str, Any] = {
             # "image": self._image,
             # "panoptic_map": self._panoptic_map,
             # "segments": self._segments,
             "predicted_classes": self._predicted_classes,
             "zero_shot_labels": self._zero_shot_labels,
+            "label_counts": self.count_candidate_labels(),
         }
+        return result
 
 
 if __name__ == "__main__":
     pipeline_runner = SamSegmentationClassifier()
     pipeline_runner.image_path = "pipeline/inputs/image.png"
-    pipeline_runner.candidate_labels = ['cat']
     print(pipeline_runner.run())
