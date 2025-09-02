@@ -5,5 +5,5 @@
 | Name | Email | FIM ID |
 | ---- | ----- | ------ |
 |Haidar Chaito|chaito01@ads.uni-passau.de|chaito|
-|  Masoud Farmani    |     farman01@ads.uni-passau.de  |    farmani    |
+|      |       |        |
 | Noureddine Kamzon      | kamzon01@ads.uni-passau.de      |    kamzon    |
