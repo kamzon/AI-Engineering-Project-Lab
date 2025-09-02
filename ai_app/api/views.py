@@ -26,12 +26,13 @@ class CountView(APIView):
         try:
             # pipeline_run must accept path + type and return dict with predicted_count + meta
             print("image:", result.image.path)
-            print("object_type:", result.object_type)
+            #print("object_type:", result.object_type)
             pipeline_run.image_path = result.image.path
-            pipeline_run.candidate_labels = [result.object_type]
+            #pipeline_run.candidate_labels = [result.object_type]
             output = pipeline_run.run()
             print('output:', output)
-            result.predicted_count = int(output.get("predicted_count", 0))
+            print("label_counts:", output.get("label_counts", {}).get(result.object_type))
+            result.predicted_count = output.get("label_counts", {}).get(result.object_type)
             result.meta = output.get("meta", {})
             result.status = "predicted"
             result.save()
