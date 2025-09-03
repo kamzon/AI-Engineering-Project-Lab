@@ -48,6 +48,11 @@ REST_FRAMEWORK = {
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
 }
 
+# Fixed choices for the UI dropdown
+OBJECT_TYPES = [
+    "car", "cat", "tree", "dog", "building", "person", "sky", "ground", "hardware",
+]
+
 SPECTACULAR_SETTINGS = {
     "TITLE": "Object Counting API",
     "VERSION": "0.1.0",
