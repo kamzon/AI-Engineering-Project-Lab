@@ -1,0 +1,76 @@
+{% load static %}
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Object Counter</title>
+  <link rel="stylesheet" href="{% static 'web/styles.css' %}">
+</head>
+<body>
+  <main class="container">
+    <h1>Object Counter</h1>
+
+    <!-- Upload & Count -->
+    <section class="card">
+      <h2>Upload image & select object</h2>
+      <form id="uploadForm" enctype="multipart/form-data">
+        {% csrf_token %}
+        <div class="row">
+          <label>Image</label>
+          <input type="file" name="image" id="imageInput" accept="image/*" required>
+        </div>
+        <div class="row">
+          <label>Object type</label>
+          <select name="object_type" id="objectType" required>
+            <option value="" disabled selected>Select type…</option>
+            {% for ot in object_types %}
+              <option value="{{ ot }}">{{ ot|title }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <button type="submit" id="uploadBtn">Count</button>
+        <span id="uploadStatus" class="muted"></span>
+      </form>
+    </section>
+
+    <!-- Latest result -->
+    <section class="card">
+      <h2>Latest result</h2>
+      {% if latest %}
+        <ul id="resultsList" class="results">
+          <li id="r-{{ latest.id }}" class="result">
+            <div class="thumb">
+              <img src="{{ latest.image.url }}" alt="{{ latest.object_type }}" />
+            </div>
+            <div class="info">
+              <div><strong>Type:</strong> {{ latest.object_type }}</div>
+              <div><strong>Status:</strong> <span class="status">{{ latest.status }}</span></div>
+              <div><strong>Predicted:</strong> <span class="pred">{{ latest.predicted_count }}</span></div>
+              {% if latest.corrected_count %}
+                <div><strong>Corrected:</strong> <span class="corr">{{ latest.corrected_count }}</span></div>
+              {% endif %}
+              <div class="small muted">{{ latest.created_at }}</div>
+            </div>
+            <form class="correctionForm" data-id="{{ latest.id }}">
+              {% csrf_token %}
+              <input type="number" name="corrected_count" min="0" placeholder="correct to…" />
+              <button type="submit">Submit correction</button>
+            </form>
+          </li>
+        </ul>
+      {% else %}
+        <p class="muted">No results yet.</p>
+      {% endif %}
+      <button id="showHistoryBtn">Show history</button>
+    </section>
+
+    <!-- History container -->
+    <section class="card" id="historySection" style="display:none;">
+      <h2>All past results</h2>
+      <ul id="historyList" class="results"></ul>
+    </section>
+  </main>
+
+  <script src="{% static 'web/app.js' %}"></script>
+</body>
+</html>
