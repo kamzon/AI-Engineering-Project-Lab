@@ -27,6 +27,9 @@ class ModelConstants:
     # Image classification
     IMAGE_MODEL_ID: str = "microsoft/resnet-50"
 
+    # Image resizing
+    IMAGE_LONGEST_SIDE: int = 1024
+
     DEFAULT_CANDIDATE_LABELS: List[str] = [
         "car",
         "cat",
@@ -89,7 +92,25 @@ class SamSegmentationClassifier:
 
     def _load_image(self) -> Image.Image:
         if self._image is None:
-            self._image = Image.open(self.image_path)
+            image = Image.open(self.image_path).convert("RGB")
+            target_longest_side = ModelConstants.IMAGE_LONGEST_SIDE
+            width, height = image.size
+            longest_side = max(width, height)
+            if longest_side != target_longest_side:
+                scale = target_longest_side / float(longest_side)
+                new_width = max(1, int(round(width * scale)))
+                new_height = max(1, int(round(height * scale)))
+                try:
+                    resample = Image.Resampling.LANCZOS
+                except AttributeError:
+                    # Fallbacks for older/newer Pillow versions without static attributes in stubs
+                    resample = (
+                        getattr(Image, "LANCZOS", None)
+                        or getattr(Image, "BICUBIC", 0)
+                    )
+                image = image.resize(
+                    (new_width, new_height), resample=resample)
+            self._image = image
         return self._image
 
     def _to_image_tensor(self) -> torch.Tensor:
@@ -326,5 +347,5 @@ class SamSegmentationClassifier:
 
 if __name__ == "__main__":
     pipeline_runner = SamSegmentationClassifier()
-    pipeline_runner.image_path = "pipeline/inputs/image.png"
+    pipeline_runner.image_path = "pipeline/inputs/image2.jpg"
     print(pipeline_runner.run())
