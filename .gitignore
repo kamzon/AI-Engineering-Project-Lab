@@ -27,7 +27,7 @@ media/
 
 # Static files (can be rebuilt)
 staticfiles/
-static/
+
 
 # Django local settings
 local_settings.py
