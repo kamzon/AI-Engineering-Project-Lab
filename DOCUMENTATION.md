@@ -94,4 +94,3 @@ The ML pipeline is invoked by the backend to process uploaded images:
 4. **User Correction**
    - If the user submits a correction, the frontend sends it to `POST /api/correct`.
    - The database record is updated accordingly.
-
