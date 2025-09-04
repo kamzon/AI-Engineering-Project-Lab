@@ -51,6 +51,7 @@ source env/bin/activate
 
 ```sh
 pip install -r requirements.txt
+pip install -r ../pipeline/requirements.txt
 ```
 
 ### 4. Apply migrations
