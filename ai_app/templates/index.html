@@ -50,28 +50,40 @@
       <h2 class="text-lg font-medium mb-3">Latest result</h2>
       {% if latest %}
         <ul id="resultsList" class="list-none p-0 m-0 grid gap-3">
-          <li id="r-{{ latest.id }}"
-            class="grid grid-cols-[140px_1fr_240px] gap-3 items-center border border-base-300 rounded-xl p-3 bg-base-100">
-            <div>
-              <img class="w-36 h-24 object-cover rounded-lg border border-base-300" src="{{ latest.image.url }}"
-                alt="{{ latest.object_type }}" />
+          <li id="r-{{ latest.id }}" class="grid gap-4 border border-base-300 rounded-xl p-3 bg-base-100">
+            <div class="grid grid-cols-1 md:grid-cols-[200px_1fr_240px] gap-3 items-center">
+              <div>
+                <img class="w-48 h-36 object-cover rounded-lg border border-base-300" src="{{ latest.image.url }}"
+                  alt="{{ latest.object_type }}" />
+                </div>
+                <div class="info grid gap-1">
+                  <div><strong>Type:</strong> {{ latest.object_type }}</div>
+                  <div><strong>Status:</strong> <span class="status badge">{{ latest.status }}</span></div>
+                  <div><strong>Predicted:</strong> <span class="pred">{{ latest.predicted_count }}</span></div>
+                  {% if latest.corrected_count %}
+                  <div><strong>Corrected:</strong> <span class="corr">{{ latest.corrected_count }}</span></div>
+                  {% endif %}
+                  <div class="text-sm text-base-content/60">{{ latest.created_at }}</div>
+                </div>
+                <form class="correctionForm flex flex-col gap-2 mt-1" data-id="{{ latest.id }}">
+                  {% csrf_token %}
+                  <input class="input input-bordered mx-auto w-32" type="number" name="corrected_count" min="0"
+                    placeholder="correct to…" />
+                <button type="submit" class="btn btn-sm">Submit correction</button>
+                </form>
             </div>
-            <div class="info grid gap-1">
-              <div><strong>Type:</strong> {{ latest.object_type }}</div>
-              <div><strong>Status:</strong> <span class="status badge">{{ latest.status }}</span></div>
-              <div><strong>Predicted:</strong> <span class="pred">{{ latest.predicted_count }}</span></div>
-              {% if latest.corrected_count %}
-                <div><strong>Corrected:</strong> <span class="corr">{{ latest.corrected_count }}</span></div>
-              {% endif %}
-              <div class="text-sm text-base-content/60">{{ latest.created_at }}</div>
-            </div>
-            <form class="correctionForm flex flex-col gap-2 mt-1" data-id="{{ latest.id }}">
-              {% csrf_token %}
-              <input class="input input-bordered mx-auto w-32" type="number" name="corrected_count" min="0"
-                placeholder="correct to…" />
-              
-              <button type="submit" class="btn btn-sm">Submit correction</button>
-            </form>
+            
+            {% if latest.meta.panoptic_url %}
+            <figure class="diff aspect-[3/2]" tabindex="0">
+              <div class="diff-item-1" role="img" tabindex="0">
+                <img alt="daisy" src="{{ latest.image.url }}" />
+              </div>
+              <div class="diff-item-2" role="img">
+                <img alt="daisy" src="{{ latest.meta.panoptic_url }}" />
+              </div>
+              <div class="diff-resizer"></div>
+            </figure>
+            {% endif %}
           </li>
         </ul>
       {% else %}

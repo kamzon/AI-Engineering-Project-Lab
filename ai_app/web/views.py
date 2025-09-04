@@ -20,6 +20,7 @@ def history(request):
             "corrected_count": r.corrected_count,
             "created_at": r.created_at.isoformat(),
             "image": r.image.url,
+            "meta": r.meta,
         }
         for r in results
     ]

@@ -1,9 +1,12 @@
 import logging
+import os
+import shutil
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.parsers import MultiPartParser, FormParser
 from django.shortcuts import get_object_or_404
+from django.conf import settings
 from drf_spectacular.utils import extend_schema, OpenApiResponse, OpenApiExample
 from records.models import Result
 from .serializers import (
@@ -65,7 +68,25 @@ class CountView(APIView):
             print('output:', output)
             print("label_counts:", output.get("label_counts", {}).get(result.object_type))
             result.predicted_count = output.get("label_counts", {}).get(result.object_type)
-            result.meta = output.get("meta", {})
+            # Save panoptic image into MEDIA_ROOT and store URL in meta
+            run_id = output.get("id")
+            panoptic_path = output.get("panoptic_path")
+            meta = {}
+            if run_id and panoptic_path and os.path.exists(panoptic_path):
+                rel_path = os.path.join("outputs", f"{run_id}.png")
+                dest_path = (settings.MEDIA_ROOT / rel_path)
+                dest_path.parent.mkdir(parents=True, exist_ok=True)
+                try:
+                    shutil.copy(panoptic_path, dest_path)
+                    panoptic_url = settings.MEDIA_URL + \
+                        rel_path.replace(os.sep, "/")
+                    meta.update(
+                        {"run_id": run_id, "panoptic_url": panoptic_url})
+                except Exception:
+                    logger.exception("Failed to copy panoptic image to media.")
+            # Merge any meta from pipeline if present
+            meta.update(output.get("meta", {}))
+            result.meta = meta
             result.status = "predicted"
             result.save()
         except Exception as e:

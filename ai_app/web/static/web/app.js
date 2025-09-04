@@ -19,23 +19,37 @@ function getStatusBadgeClass(status) {
 }
 
 function resultItemHTML(data, csrfToken) {
+  const panopticUrl = data.meta?.panoptic_url;
   return `
-    <li id="r-${data.id}" class="grid grid-cols-[140px_1fr_240px] gap-3 items-center border border-base-300 rounded-xl p-3 bg-base-100">
-      <div>
-        <img class="w-36 h-24 object-cover rounded-lg border border-base-300" src="${data.image}" alt="${data.object_type}" />
+    <li id="r-${data.id}" class="grid gap-4 border border-base-300 rounded-xl p-3 bg-base-100">
+      <div class="grid grid-cols-1 md:grid-cols-[200px_1fr_240px] gap-3 items-center">
+        <div>
+          <img class="w-48 h-36 object-cover rounded-lg border border-base-300" src="${data.image}" alt="${data.object_type}" />
+        </div>
+        <div class="info grid gap-1">
+          <div><strong>Type:</strong> ${data.object_type}</div>
+          <div><strong>Status:</strong> <span class="status ${getStatusBadgeClass(data.status)}">${data.status}</span></div>
+          <div><strong>Predicted:</strong> <span class="pred">${data.predicted_count}</span></div>
+          ${data.corrected_count !== null ? `<div><strong>Corrected:</strong> <span class="corr">${data.corrected_count}</span></div>` : ""}
+          <div class="text-sm text-base-content/60">${new Date(data.created_at).toLocaleString()}</div>
+        </div>
+        <form class="correctionForm flex flex-col gap-2 mt-1" data-id="${data.id}">
+          <input type="hidden" name="csrfmiddlewaretoken" value="${csrfToken}">
+          <input class="input input-bordered w-32 mx-auto" type="number" name="corrected_count" min="0" placeholder="correct to…">
+          <button type="submit" class="btn btn-sm">Submit correction</button>
+        </form>
       </div>
-      <div class="info grid gap-1">
-        <div><strong>Type:</strong> ${data.object_type}</div>
-        <div><strong>Status:</strong> <span class="status ${getStatusBadgeClass(data.status)}">${data.status}</span></div>
-        <div><strong>Predicted:</strong> <span class="pred">${data.predicted_count}</span></div>
-        ${data.corrected_count !== null ? `<div><strong>Corrected:</strong> <span class="corr">${data.corrected_count}</span></div>` : ""}
-        <div class="text-sm text-base-content/60">${new Date(data.created_at).toLocaleString()}</div>
-      </div>
-      <form class="correctionForm flex flex-col gap-2 mt-1" data-id="${data.id}">
-        <input type="hidden" name="csrfmiddlewaretoken" value="${csrfToken}">
-        <input class="input input-bordered w-32 mx-auto" type="number" name="corrected_count" min="0" placeholder="correct to…">
-        <button type="submit" class="btn btn-sm">Submit correction</button>
-      </form>
+      ${panopticUrl ? `
+            <figure class="diff aspect-[3/2]" tabindex="0">
+              <div class="diff-item-1" role="img" tabindex="0">
+                <img alt="daisy" src="${data.image}" />
+              </div>
+              <div class="diff-item-2" role="img">
+                <img alt="daisy" src="${panopticUrl}" />
+              </div>
+              <div class="diff-resizer"></div>
+            </figure>
+      ` : ""}
     </li>
   `;
 }
