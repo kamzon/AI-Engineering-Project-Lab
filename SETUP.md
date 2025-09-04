@@ -25,13 +25,14 @@ ai_app/
 ├── config/
 ├── records/
 ├── templates/
-├── var/
-│   └── media/
+├── media/
 │       └── uploads/
 └── web/
 ```
 
 ## Setup Instructions
+
+Python 3.12.8
 
 ### 1. Clone the repository
 
