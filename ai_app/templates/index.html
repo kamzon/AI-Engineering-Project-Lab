@@ -1,81 +1,91 @@
 {% load static %}
 <!doctype html>
-<html>
+<html data-theme="winter" class="bg-base-200">
 <head>
   <meta charset="utf-8">
   <title>Object Counter</title>
-  <link rel="stylesheet" href="{% static 'web/styles.css' %}">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.10/dist/full.min.css" rel="stylesheet" type="text/css" />
 </head>
-<body>
-  <main class="container">
-    <h1>Object Counter</h1>
-    <p class="subtitle">Upload an image, select an object type, and get a quick count. Submit corrections if needed.</p>
+<body class="bg-base-200">
+  <main class="max-w-4xl mx-auto px-4 my-7">
+    <h1 class="text-3xl font-semibold mb-1">Object Counter</h1>
+    <p class="text-base-content/60 mb-5">Upload an image, select an object type, and get a quick count. Submit
+      corrections
+      if needed.</p>
+    <div class="space-y-6">
 
     <!-- Upload & Count -->
-    <section class="card">
-      <h2>Upload image & select object</h2>
-      <form id="uploadForm" class="form" enctype="multipart/form-data">
+    <section class="bg-base-100 border border-base-300 rounded-xl p-4 shadow">
+      <h2 class="text-lg font-medium mb-3">Upload image & select object</h2>
+      <form id="uploadForm" enctype="multipart/form-data">
         {% csrf_token %}
-        <div class="row">
-          <label>Image</label>
-          <input type="file" name="image" id="imageInput" accept="image/*" required>
+        <div class="flex items-center gap-2 my-2">
+          <label class="w-36 text-base-content/60">Image</label>
+          <input class="file-input file-input-bordered w-full" type="file" name="image" id="imageInput" accept="image/*"
+            required>
         </div>
-        <div class="row">
-          <label>Object type</label>
-          <select name="object_type" id="objectType" required>
+        <div class="flex items-center gap-2 my-2">
+          <label class="w-36 text-base-content/60">Object type</label>
+          <select class="select select-bordered w-full" name="object_type" id="objectType" required>
             <option value="" disabled selected>Select type…</option>
             {% for ot in object_types %}
               <option value="{{ ot }}">{{ ot|title }}</option>
             {% endfor %}
           </select>
         </div>
-        <div class="actions">
-          <button type="submit" id="uploadBtn" class="btn btn-primary">
+        <div class="flex gap-2 justify-end mt-3">
+          <button type="submit" id="uploadBtn" class="btn btn-primary btn-sm">
             <span class="btn-label">Count</span>
-            <span class="spinner" style="display:none"></span>
+            <span class="loading loading-spinner loading-xs hidden"></span>
           </button>
-          <a class="btn" href="/api/docs/" target="_blank" rel="noopener">API Docs</a>
-          <span id="uploadStatus" class="muted"></span>
+          <a class="btn btn-sm" href="/api/docs/" target="_blank" rel="noopener">API Docs</a>
+          <span id="uploadStatus" class="text-base-content/60"></span>
         </div>
       </form>
     </section>
 
     <!-- Latest result -->
-    <section class="card">
-      <h2>Latest result</h2>
+    <section class="bg-base-100 border border-base-300 rounded-xl p-4 shadow">
+      <h2 class="text-lg font-medium mb-3">Latest result</h2>
       {% if latest %}
-        <ul id="resultsList" class="results">
-          <li id="r-{{ latest.id }}" class="result">
-            <div class="thumb">
-              <img src="{{ latest.image.url }}" alt="{{ latest.object_type }}" />
+        <ul id="resultsList" class="list-none p-0 m-0 grid gap-3">
+          <li id="r-{{ latest.id }}"
+            class="grid grid-cols-[140px_1fr_240px] gap-3 items-center border border-base-300 rounded-xl p-3 bg-base-100">
+            <div>
+              <img class="w-36 h-24 object-cover rounded-lg border border-base-300" src="{{ latest.image.url }}"
+                alt="{{ latest.object_type }}" />
             </div>
-            <div class="info">
+            <div class="info grid gap-1">
               <div><strong>Type:</strong> {{ latest.object_type }}</div>
               <div><strong>Status:</strong> <span class="status badge">{{ latest.status }}</span></div>
               <div><strong>Predicted:</strong> <span class="pred">{{ latest.predicted_count }}</span></div>
               {% if latest.corrected_count %}
                 <div><strong>Corrected:</strong> <span class="corr">{{ latest.corrected_count }}</span></div>
               {% endif %}
-              <div class="small muted">{{ latest.created_at }}</div>
+              <div class="text-sm text-base-content/60">{{ latest.created_at }}</div>
             </div>
-            <form class="correctionForm" data-id="{{ latest.id }}">
+            <form class="correctionForm flex flex-col gap-2 mt-1" data-id="{{ latest.id }}">
               {% csrf_token %}
-              <input type="number" name="corrected_count" min="0" placeholder="correct to…" />
-              <button type="submit" class="btn">Submit correction</button>
+              <input class="input input-bordered mx-auto w-32" type="number" name="corrected_count" min="0"
+                placeholder="correct to…" />
+              
+              <button type="submit" class="btn btn-sm">Submit correction</button>
             </form>
           </li>
         </ul>
       {% else %}
-        <p class="muted">No results yet.</p>
+        <p class="text-base-content/60">No results yet.</p>
       {% endif %}
-      <button id="showHistoryBtn" class="btn">Show history</button>
+      <button id="showHistoryBtn" class="btn btn-sm mt-3">Show history</button>
     </section>
 
     <!-- History container -->
-    <section class="card" id="historySection" style="display:none;">
-      <h2>All past results</h2>
-      <ul id="historyList" class="results"></ul>
+    <section class="bg-base-100 border border-base-300 rounded-xl p-4 shadow hidden" id="historySection">
+      <h2 class="text-lg font-medium mb-3">All past results</h2>
+      <ul id="historyList" class="list-none p-0 m-0 grid gap-3"></ul>
     </section>
+    </div>
   </main>
 
   <script src="{% static 'web/app.js' %}"></script>

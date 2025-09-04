@@ -3,23 +3,38 @@ function getCSRF() {
   return el ? el.value : "";
 }
 
+function getStatusBadgeClass(status) {
+  switch (status) {
+    case "processing":
+      return "badge badge-warning";
+    case "predicted":
+      return "badge badge-info";
+    case "failed":
+      return "badge badge-error";
+    case "corrected":
+      return "badge badge-success";
+    default:
+      return "badge";
+  }
+}
+
 function resultItemHTML(data, csrfToken) {
   return `
-    <li id="r-${data.id}" class="result">
-      <div class="thumb">
-        <img src="${data.image}" alt="${data.object_type}" />
+    <li id="r-${data.id}" class="grid grid-cols-[140px_1fr_240px] gap-3 items-center border border-base-300 rounded-xl p-3 bg-base-100">
+      <div>
+        <img class="w-36 h-24 object-cover rounded-lg border border-base-300" src="${data.image}" alt="${data.object_type}" />
       </div>
-      <div class="info">
+      <div class="info grid gap-1">
         <div><strong>Type:</strong> ${data.object_type}</div>
-        <div><strong>Status:</strong> <span class="status badge status--${data.status}">${data.status}</span></div>
+        <div><strong>Status:</strong> <span class="status ${getStatusBadgeClass(data.status)}">${data.status}</span></div>
         <div><strong>Predicted:</strong> <span class="pred">${data.predicted_count}</span></div>
         ${data.corrected_count !== null ? `<div><strong>Corrected:</strong> <span class="corr">${data.corrected_count}</span></div>` : ""}
-        <div class="small muted">${new Date(data.created_at).toLocaleString()}</div>
+        <div class="text-sm text-base-content/60">${new Date(data.created_at).toLocaleString()}</div>
       </div>
-      <form class="correctionForm" data-id="${data.id}">
+      <form class="correctionForm flex flex-col gap-2 mt-1" data-id="${data.id}">
         <input type="hidden" name="csrfmiddlewaretoken" value="${csrfToken}">
-        <input type="number" name="corrected_count" min="0" placeholder="correct to…">
-        <button type="submit" class="btn">Submit correction</button>
+        <input class="input input-bordered w-32 mx-auto" type="number" name="corrected_count" min="0" placeholder="correct to…">
+        <button type="submit" class="btn btn-sm">Submit correction</button>
       </form>
     </li>
   `;
@@ -29,7 +44,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const uploadForm = document.getElementById("uploadForm");
   const uploadBtn = document.getElementById("uploadBtn");
   const uploadBtnLabel = uploadBtn.querySelector(".btn-label");
-  const uploadBtnSpinner = uploadBtn.querySelector(".spinner");
+  const uploadBtnSpinner = uploadBtn.querySelector(".loading-spinner");
   const uploadStatus = document.getElementById("uploadStatus");
   const resultsList = document.getElementById("resultsList");
 
@@ -48,9 +63,8 @@ document.addEventListener("DOMContentLoaded", () => {
     uploadBtn.disabled = true;
     if (uploadBtnLabel && uploadBtnSpinner) {
       uploadBtnLabel.textContent = "Processing…";
-      uploadBtnSpinner.style.display = "inline-block";
+      uploadBtnSpinner.classList.remove("hidden");
     }
-    uploadStatus.textContent = "Processing…";
 
     try {
       const resp = await fetch("/api/count/", {
@@ -73,7 +87,7 @@ document.addEventListener("DOMContentLoaded", () => {
       uploadBtn.disabled = false;
       if (uploadBtnLabel && uploadBtnSpinner) {
         uploadBtnLabel.textContent = "Count";
-        uploadBtnSpinner.style.display = "none";
+        uploadBtnSpinner.classList.add("hidden");
       }
       setTimeout(() => (uploadStatus.textContent = ""), 1500);
       uploadForm.reset();
@@ -114,8 +128,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (li) {
           const statusEl = li.querySelector(".status");
           statusEl.textContent = data.status;
-          statusEl.classList.remove("status--processing", "status--predicted", "status--failed", "status--corrected");
-          statusEl.classList.add(`status--${data.status}`);
+          statusEl.className = `status ${getStatusBadgeClass(data.status)}`;
           const corr = li.querySelector(".corr");
           if (corr) corr.textContent = data.corrected_count;
           else {
@@ -148,7 +161,7 @@ document.addEventListener("DOMContentLoaded", () => {
       data.forEach(item => {
         historyList.insertAdjacentHTML("beforeend", resultItemHTML(item, csrf));
       });
-      historySection.style.display = "block";
+      historySection.classList.remove("hidden");
     } catch (err) {
       alert("Could not load history: " + err);
     } finally {
