@@ -42,7 +42,6 @@ INSTALLED_APPS = [
     "web",
     "api",
     "records",
-    "pipline_app",
 ]
 REST_FRAMEWORK = {
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
