@@ -9,11 +9,12 @@
 <body>
   <main class="container">
     <h1>Object Counter</h1>
+    <p class="subtitle">Upload an image, select an object type, and get a quick count. Submit corrections if needed.</p>
 
     <!-- Upload & Count -->
     <section class="card">
       <h2>Upload image & select object</h2>
-      <form id="uploadForm" enctype="multipart/form-data">
+      <form id="uploadForm" class="form" enctype="multipart/form-data">
         {% csrf_token %}
         <div class="row">
           <label>Image</label>
@@ -28,8 +29,14 @@
             {% endfor %}
           </select>
         </div>
-        <button type="submit" id="uploadBtn">Count</button>
-        <span id="uploadStatus" class="muted"></span>
+        <div class="actions">
+          <button type="submit" id="uploadBtn" class="btn btn-primary">
+            <span class="btn-label">Count</span>
+            <span class="spinner" style="display:none"></span>
+          </button>
+          <a class="btn" href="/api/docs/" target="_blank" rel="noopener">API Docs</a>
+          <span id="uploadStatus" class="muted"></span>
+        </div>
       </form>
     </section>
 
@@ -44,7 +51,7 @@
             </div>
             <div class="info">
               <div><strong>Type:</strong> {{ latest.object_type }}</div>
-              <div><strong>Status:</strong> <span class="status">{{ latest.status }}</span></div>
+              <div><strong>Status:</strong> <span class="status badge">{{ latest.status }}</span></div>
               <div><strong>Predicted:</strong> <span class="pred">{{ latest.predicted_count }}</span></div>
               {% if latest.corrected_count %}
                 <div><strong>Corrected:</strong> <span class="corr">{{ latest.corrected_count }}</span></div>
@@ -54,14 +61,14 @@
             <form class="correctionForm" data-id="{{ latest.id }}">
               {% csrf_token %}
               <input type="number" name="corrected_count" min="0" placeholder="correct to…" />
-              <button type="submit">Submit correction</button>
+              <button type="submit" class="btn">Submit correction</button>
             </form>
           </li>
         </ul>
       {% else %}
         <p class="muted">No results yet.</p>
       {% endif %}
-      <button id="showHistoryBtn">Show history</button>
+      <button id="showHistoryBtn" class="btn">Show history</button>
     </section>
 
     <!-- History container -->

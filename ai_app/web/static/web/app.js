@@ -11,7 +11,7 @@ function resultItemHTML(data, csrfToken) {
       </div>
       <div class="info">
         <div><strong>Type:</strong> ${data.object_type}</div>
-        <div><strong>Status:</strong> <span class="status">${data.status}</span></div>
+        <div><strong>Status:</strong> <span class="status badge status--${data.status}">${data.status}</span></div>
         <div><strong>Predicted:</strong> <span class="pred">${data.predicted_count}</span></div>
         ${data.corrected_count !== null ? `<div><strong>Corrected:</strong> <span class="corr">${data.corrected_count}</span></div>` : ""}
         <div class="small muted">${new Date(data.created_at).toLocaleString()}</div>
@@ -19,7 +19,7 @@ function resultItemHTML(data, csrfToken) {
       <form class="correctionForm" data-id="${data.id}">
         <input type="hidden" name="csrfmiddlewaretoken" value="${csrfToken}">
         <input type="number" name="corrected_count" min="0" placeholder="correct to…">
-        <button type="submit">Submit correction</button>
+        <button type="submit" class="btn">Submit correction</button>
       </form>
     </li>
   `;
@@ -28,6 +28,8 @@ function resultItemHTML(data, csrfToken) {
 document.addEventListener("DOMContentLoaded", () => {
   const uploadForm = document.getElementById("uploadForm");
   const uploadBtn = document.getElementById("uploadBtn");
+  const uploadBtnLabel = uploadBtn.querySelector(".btn-label");
+  const uploadBtnSpinner = uploadBtn.querySelector(".spinner");
   const uploadStatus = document.getElementById("uploadStatus");
   const resultsList = document.getElementById("resultsList");
 
@@ -44,6 +46,10 @@ document.addEventListener("DOMContentLoaded", () => {
     fd.append("object_type", objectType);
 
     uploadBtn.disabled = true;
+    if (uploadBtnLabel && uploadBtnSpinner) {
+      uploadBtnLabel.textContent = "Processing…";
+      uploadBtnSpinner.style.display = "inline-block";
+    }
     uploadStatus.textContent = "Processing…";
 
     try {
@@ -65,6 +71,10 @@ document.addEventListener("DOMContentLoaded", () => {
       uploadStatus.textContent = `Error: ${err}`;
     } finally {
       uploadBtn.disabled = false;
+      if (uploadBtnLabel && uploadBtnSpinner) {
+        uploadBtnLabel.textContent = "Count";
+        uploadBtnSpinner.style.display = "none";
+      }
       setTimeout(() => (uploadStatus.textContent = ""), 1500);
       uploadForm.reset();
     }
@@ -102,7 +112,10 @@ document.addEventListener("DOMContentLoaded", () => {
       } else {
         const li = document.getElementById(`r-${id}`);
         if (li) {
-          li.querySelector(".status").textContent = data.status;
+          const statusEl = li.querySelector(".status");
+          statusEl.textContent = data.status;
+          statusEl.classList.remove("status--processing", "status--predicted", "status--failed", "status--corrected");
+          statusEl.classList.add(`status--${data.status}`);
           const corr = li.querySelector(".corr");
           if (corr) corr.textContent = data.corrected_count;
           else {
