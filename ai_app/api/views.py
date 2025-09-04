@@ -52,51 +52,54 @@ class CountView(APIView):
             return Response(input_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         validated = input_serializer.validated_data
-        image = validated["image"]
         object_type = validated["object_type"]
-        pipeline_run = SamSegmentationClassifier()
+        single_image = validated.get("image")
+        images_list = validated.get("images")
 
-        # create record and save file to MEDIA_ROOT
-        result = Result.objects.create(image=image, object_type=object_type, status="processing")
-        try:
-            # pipeline_run must accept path + type and return dict with predicted_count + meta
-            print("image:", result.image.path)
-            #print("object_type:", result.object_type)
-            pipeline_run.image_path = result.image.path
-            #pipeline_run.candidate_labels = [result.object_type]
-            output = pipeline_run.run()
-            print('output:', output)
-            print("label_counts:", output.get("label_counts", {}).get(result.object_type))
-            result.predicted_count = output.get("label_counts", {}).get(result.object_type)
-            # Save panoptic image into MEDIA_ROOT and store URL in meta
-            run_id = output.get("id")
-            panoptic_path = output.get("panoptic_path")
-            meta = {}
-            if run_id and panoptic_path and os.path.exists(panoptic_path):
-                rel_path = os.path.join("outputs", f"{run_id}.png")
-                dest_path = (settings.MEDIA_ROOT / rel_path)
-                dest_path.parent.mkdir(parents=True, exist_ok=True)
-                try:
-                    shutil.copy(panoptic_path, dest_path)
-                    panoptic_url = settings.MEDIA_URL + \
-                        rel_path.replace(os.sep, "/")
-                    meta.update(
-                        {"run_id": run_id, "panoptic_url": panoptic_url})
-                except Exception:
-                    logger.exception("Failed to copy panoptic image to media.")
-            # Merge any meta from pipeline if present
-            meta.update(output.get("meta", {}))
-            result.meta = meta
-            result.status = "predicted"
-            result.save()
-        except Exception as e:
-            logger.exception("Pipeline failed for Result id=%s", result.id)
-            result.status = "failed"
-            result.meta = {"error": str(e)}
-            result.save()
-            return Response({"detail": "processing error", "error": str(e)}, status=500)
+        def process_one(uploaded_image):
+            pipeline_run = SamSegmentationClassifier()
+            res = Result.objects.create(
+                image=uploaded_image, object_type=object_type, status="processing")
+            try:
+                pipeline_run.image_path = res.image.path
+                output = pipeline_run.run()
+                res.predicted_count = output.get(
+                    "label_counts", {}).get(res.object_type)
+                # Save panoptic image into MEDIA_ROOT and store URL in meta
+                run_id = output.get("id")
+                panoptic_path = output.get("panoptic_path")
+                meta = {}
+                if run_id and panoptic_path and os.path.exists(panoptic_path):
+                    rel_path = os.path.join("outputs", f"{run_id}.png")
+                    dest_path = (settings.MEDIA_ROOT / rel_path)
+                    dest_path.parent.mkdir(parents=True, exist_ok=True)
+                    try:
+                        shutil.copy(panoptic_path, dest_path)
+                        panoptic_url = settings.MEDIA_URL + \
+                            rel_path.replace(os.sep, "/")
+                        meta.update(
+                            {"run_id": run_id, "panoptic_url": panoptic_url})
+                    except Exception:
+                        logger.exception(
+                            "Failed to copy panoptic image to media.")
+                meta.update(output.get("meta", {}))
+                res.meta = meta
+                res.status = "predicted"
+                res.save()
+            except Exception as e:
+                logger.exception("Pipeline failed for Result id=%s", res.id)
+                res.status = "failed"
+                res.meta = {"error": str(e)}
+                res.save()
+            return res
 
-        return Response(ResultSerializer(result).data, status=status.HTTP_201_CREATED)
+        if images_list:
+            results = [process_one(img) for img in images_list]
+            data = ResultSerializer(results, many=True).data
+            return Response(data, status=status.HTTP_201_CREATED)
+        else:
+            result = process_one(single_image)
+            return Response(ResultSerializer(result).data, status=status.HTTP_201_CREATED)
 
 
 class CorrectionView(APIView):

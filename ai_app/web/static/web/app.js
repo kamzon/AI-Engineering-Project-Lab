@@ -65,13 +65,18 @@ document.addEventListener("DOMContentLoaded", () => {
   uploadForm.addEventListener("submit", async (e) => {
     e.preventDefault();
 
-    const image = document.getElementById("imageInput").files[0];
+    const files = Array.from(document.getElementById("imageInput").files || []);
     const objectType = document.getElementById("objectType").value;
-    if (!image || !objectType) return;
+    if (files.length === 0 || !objectType) return;
 
     const csrf = getCSRF();
     const fd = new FormData();
-    fd.append("image", image);
+    // Send either one or multiple images using the 'images' field
+    if (files.length === 1) {
+      fd.append("image", files[0]);
+    } else {
+      files.forEach(file => fd.append("images", file));
+    }
     fd.append("object_type", objectType);
 
     uploadBtn.disabled = true;
@@ -92,8 +97,12 @@ document.addEventListener("DOMContentLoaded", () => {
         uploadStatus.textContent = `Error: ${data.detail || JSON.stringify(data)}`;
       } else {
         uploadStatus.textContent = "Done.";
-        // Replace latest result with new one
-        resultsList.innerHTML = resultItemHTML(data, csrf);
+        // Replace latest result(s) with new one(s)
+        resultsList.innerHTML = "";
+        const items = Array.isArray(data) ? data : [data];
+        items.forEach(item => {
+          resultsList.insertAdjacentHTML("beforeend", resultItemHTML(item, csrf));
+        });
       }
     } catch (err) {
       uploadStatus.textContent = `Error: ${err}`;

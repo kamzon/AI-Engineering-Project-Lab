@@ -21,12 +21,28 @@ class ResultSerializer(serializers.ModelSerializer):
 
 class CountRequestSerializer(serializers.Serializer):
     """Schema for the count endpoint request body."""
+    # Support either a single image or multiple images
     image = serializers.ImageField(
-        help_text="Image file to analyze. Accepts common image formats.")
+        required=False,
+        help_text="Single image to analyze.")
+    images = serializers.ListField(
+        child=serializers.ImageField(),
+        required=False,
+        allow_empty=False,
+        help_text="Multiple images to analyze (repeat field in multipart).",
+    )
     object_type = serializers.ChoiceField(
         choices=settings.OBJECT_TYPES,
         help_text="Which object type to count in the image.",
     )
+
+    def validate(self, attrs):
+        single = attrs.get("image")
+        many = attrs.get("images")
+        if not single and not many:
+            raise serializers.ValidationError(
+                "Provide either 'image' or 'images'.")
+        return attrs
 
 
 class CorrectionRequestSerializer(serializers.Serializer):
