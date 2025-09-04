@@ -12,6 +12,8 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 from pathlib import Path
 
+from pipeline.model import ModelConstants
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -48,9 +50,7 @@ REST_FRAMEWORK = {
 }
 
 # Fixed choices for the UI dropdown
-OBJECT_TYPES = [
-    "car", "cat", "tree", "dog", "building", "person", "sky", "ground", "hardware",
-]
+OBJECT_TYPES = ModelConstants.DEFAULT_CANDIDATE_LABELS
 
 SPECTACULAR_SETTINGS = {
     "TITLE": "Object Counting API",
