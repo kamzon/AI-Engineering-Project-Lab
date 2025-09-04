@@ -1,4 +1,5 @@
 import os
+import uuid
 import urllib.request
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -159,6 +160,29 @@ class SamSegmentationClassifier:
             panoptic_map_np[mask_data["segmentation"]] = idx + 1
         self._panoptic_map = torch.from_numpy(panoptic_map_np)
         return self._panoptic_map
+
+    def save_panoptic_map_image(self, output_path: str = "pipeline/outputs/panoptic.png") -> str:
+        """
+        Save the panoptic map as a colorized PNG image using the tab20 colormap.
+        Returns the saved file path.
+        """
+        if self._panoptic_map is None:
+            self.build_panoptic_map()
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        assert self._panoptic_map is not None
+        panoptic_np = self._panoptic_map.cpu().numpy().astype(np.int32)
+        max_label = int(panoptic_np.max()) if panoptic_np.size > 0 else 0
+        if max_label == 0:
+            color_img = np.zeros((*panoptic_np.shape, 3), dtype=np.uint8)
+        else:
+            cmap = plt.get_cmap("tab20", max(20, max_label + 1))
+            # Map each label to a color; label 0 stays black
+            colors = (cmap(np.arange(max_label + 1))
+                      [:, :3] * 255).astype(np.uint8)
+            color_img = colors[panoptic_np]
+            color_img[panoptic_np == 0] = 0
+        Image.fromarray(color_img, mode="RGB").save(output_path)
+        return output_path
 
     def _iterate_labels(self) -> List[int]:
         if self._panoptic_map is None:
@@ -334,6 +358,9 @@ class SamSegmentationClassifier:
             self.plot_original_and_panoptic()
             self.plot_segments()
 
+        run_id = uuid.uuid4().hex
+        panoptic_path = os.path.join("pipeline", "outputs", f"{run_id}.png")
+        self.save_panoptic_map_image(panoptic_path)
         result: Dict[str, Any] = {
             # "image": self._image,
             # "panoptic_map": self._panoptic_map,
@@ -341,6 +368,8 @@ class SamSegmentationClassifier:
             "predicted_classes": self._predicted_classes,
             "zero_shot_labels": self._zero_shot_labels,
             "label_counts": self.count_candidate_labels(),
+            "id": run_id,
+            "panoptic_path": panoptic_path,
         }
         return result
 

@@ -1,6 +1,7 @@
 /venv
 sam_vit_b_01ec64.pth
 
+pipeline/outputs/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
