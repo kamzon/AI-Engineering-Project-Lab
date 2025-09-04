@@ -84,7 +84,7 @@ python manage.py test
 
 ## Notes
 
-- Uploaded images are stored in `var/media/uploads/`.
+- Uploaded images are stored in `media/uploads/`.
 - Update `settings.py` for custom configurations as needed.
 
 
