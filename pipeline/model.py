@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import torchvision.transforms as tf
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 
 from segment_anything import SamAutomaticMaskGenerator, sam_model_registry
 from transformers import (
@@ -161,9 +161,11 @@ class SamSegmentationClassifier:
         self._panoptic_map = torch.from_numpy(panoptic_map_np)
         return self._panoptic_map
 
-    def save_panoptic_map_image(self, output_path: str = "pipeline/outputs/panoptic.png") -> str:
+    def save_panoptic_map_image(self, output_path: str = "pipeline/outputs/panoptic.png", labels: Optional[List[str]] = None, annotate: bool = True) -> str:
         """
         Save the panoptic map as a colorized PNG image using the tab20 colormap.
+        If labels are provided (in order of label ids 1..N) and annotate=True,
+        overlay the label id and text on each segment.
         Returns the saved file path.
         """
         if self._panoptic_map is None:
@@ -181,7 +183,53 @@ class SamSegmentationClassifier:
                       [:, :3] * 255).astype(np.uint8)
             color_img = colors[panoptic_np]
             color_img[panoptic_np == 0] = 0
-        Image.fromarray(color_img, mode="RGB").save(output_path)
+        img_pil = Image.fromarray(color_img, mode="RGB")
+
+        if annotate:
+            # Ensure we have labels aligned to segment label indices (1..N)
+            draw = ImageDraw.Draw(img_pil)
+            try:
+                font = ImageFont.load_default()
+            except Exception:
+                font = None
+            # Iterate over present labels to place text at mask centroid
+            for label_id in self._iterate_labels():
+                # _iterate_labels excludes 0
+                mask = self._panoptic_map == label_id
+                mask_np = mask.cpu().numpy()
+                ys, xs = np.where(mask_np)
+                if ys.size == 0:
+                    continue
+                cx = int(xs.mean())
+                cy = int(ys.mean())
+                text = str(label_id)
+                if labels and 0 <= (label_id - 1) < len(labels):
+                    text = f"{label_id}: {labels[label_id - 1]}"
+                # Draw white text with black stroke for contrast
+                try:
+                    draw.text((cx, cy), text, fill=(255, 255, 255), font=font,
+                              stroke_width=2, stroke_fill=(0, 0, 0), anchor="mm")
+                except TypeError:
+                    # Fallback: center manually without anchor support
+                    try:
+                        bbox = draw.textbbox((0, 0), text, font=font)
+                        tw = bbox[2] - bbox[0]
+                        th = bbox[3] - bbox[1]
+                    except Exception:
+                        # Rough estimate if textbbox unavailable
+                        tw, th = (8 * len(text), 12)
+                    tx = int(cx - tw / 2)
+                    ty = int(cy - th / 2)
+                    # Optional background for readability
+                    bg_pad = 2
+                    try:
+                        draw.rectangle(
+                            [tx - bg_pad, ty - bg_pad, tx + tw + bg_pad, ty + th + bg_pad], fill=(0, 0, 0))
+                    except Exception:
+                        pass
+                    draw.text((tx, ty), text, fill=(255, 255, 255), font=font)
+
+        img_pil.save(output_path)
         return output_path
 
     def _iterate_labels(self) -> List[int]:
@@ -360,7 +408,8 @@ class SamSegmentationClassifier:
 
         run_id = uuid.uuid4().hex
         panoptic_path = os.path.join("pipeline", "outputs", f"{run_id}.png")
-        self.save_panoptic_map_image(panoptic_path)
+        self.save_panoptic_map_image(
+            panoptic_path, labels=self._zero_shot_labels, annotate=True)
         result: Dict[str, Any] = {
             # "image": self._image,
             # "panoptic_map": self._panoptic_map,
