@@ -2,24 +2,56 @@ import logging
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.parsers import MultiPartParser, FormParser
 from django.shortcuts import get_object_or_404
+from drf_spectacular.utils import extend_schema, OpenApiResponse, OpenApiExample
 from records.models import Result
-from .serializers import ResultSerializer
+from .serializers import (
+    ResultSerializer,
+    CountRequestSerializer,
+    CorrectionRequestSerializer,
+)
 from pipeline.model import SamSegmentationClassifier
 
 logger = logging.getLogger(__name__)
 
 class CountView(APIView):
-    """
-    Accepts multipart form: 'image' file + 'object_type' string.
-    Creates Result (status=processing), runs pipeline (sync), updates result.
-    """
-    def post(self, request, *args, **kwargs):
+    """Run segmentation and count objects of a specific type in an image."""
+
+    parser_classes = [MultiPartParser, FormParser]
+
+    @extend_schema(
+        summary="Count objects in an uploaded image",
+        description=(
+            "Uploads an image and runs the segmentation/counting pipeline for the given "
+            "object_type. Returns the created Result with predicted_count and metadata."
+        ),
+        request=CountRequestSerializer,
+        responses={
+            201: ResultSerializer,
+            400: OpenApiResponse(description="Missing or invalid parameters"),
+            500: OpenApiResponse(description="Processing error in pipeline"),
+        },
+        tags=["Counting"],
+        examples=[
+            OpenApiExample(
+                "Car counting example",
+                description="Multipart form-data upload for counting cars.",
+                value={"object_type": "car"},
+                request_only=True,
+            ),
+        ],
+    )
+    def post(self, request):
+        # Validate input via serializer so schema matches implementation
+        input_serializer = CountRequestSerializer(data=request.data)
+        if not input_serializer.is_valid():
+            return Response(input_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        validated = input_serializer.validated_data
+        image = validated["image"]
+        object_type = validated["object_type"]
         pipeline_run = SamSegmentationClassifier()
-        image = request.FILES.get("image")
-        object_type = request.data.get("object_type")
-        if not image or not object_type:
-            return Response({"detail": "image and object_type are required"}, status=400)
 
         # create record and save file to MEDIA_ROOT
         result = Result.objects.create(image=image, object_type=object_type, status="processing")
@@ -47,22 +79,41 @@ class CountView(APIView):
 
 
 class CorrectionView(APIView):
-    """
-    Accepts form-data or json: result_id + corrected_count.
-    Updates the record.
-    """
-    def post(self, request, *args, **kwargs):
-        result_id = request.data.get("result_id")
-        corrected_count = request.data.get("corrected_count")
-        if result_id is None or corrected_count is None:
-            return Response({"detail": "result_id and corrected_count are required"}, status=400)
+    """Submit a corrected count for a prior result."""
+
+    @extend_schema(
+        summary="Submit corrected count",
+        description=(
+            "Updates a Result with a user-provided corrected_count. Can accept JSON or "
+            "form-data payloads."
+        ),
+        request=CorrectionRequestSerializer,
+        responses={
+            200: ResultSerializer,
+            400: OpenApiResponse(description="Validation error"),
+            404: OpenApiResponse(description="Result not found"),
+        },
+        tags=["Counting"],
+        examples=[
+            OpenApiExample(
+                "Corrected count example",
+                value={"result_id": 1, "corrected_count": 42},
+                request_only=True,
+            )
+        ],
+    )
+    def post(self, request):
+        input_serializer = CorrectionRequestSerializer(data=request.data)
+        if not input_serializer.is_valid():
+            return Response(input_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        validated = input_serializer.validated_data
+        result_id = validated["result_id"]
+        corrected_count = validated["corrected_count"]
 
         result = get_object_or_404(Result, id=result_id)
-        try:
-            result.corrected_count = int(corrected_count)
-            result.status = "corrected"
-            result.save()
-        except ValueError:
-            return Response({"detail": "corrected_count must be an integer"}, status=400)
+        result.corrected_count = corrected_count
+        result.status = "corrected"
+        result.save()
 
         return Response(ResultSerializer(result).data, status=200)
