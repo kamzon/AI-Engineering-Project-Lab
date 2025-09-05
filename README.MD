@@ -4,3 +4,7 @@
 | ----------------- | -------------------------- | ------ |
 | Haidar Chaito     | chaito01@ads.uni-passau.de | chaito |
 | Noureddine Kamzon | kamzon01@ads.uni-passau.de | kamzon |
+
+
+
+👉 See full setup instructions in [SETUP.md](SETUP.md)
