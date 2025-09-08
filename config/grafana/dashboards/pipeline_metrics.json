@@ -1,0 +1,167 @@
+{
+  "id": null,
+  "uid": "pipeline-metrics",
+  "title": "Pipeline Metrics",
+  "timezone": "browser",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "15s",
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Image Resolution Width",
+      "gridPos": { "h": 6, "w": 24, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "targets": [
+        { "expr": "pipeline_image_resolution_width" }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Image Resolution Height",
+      "gridPos": { "h": 6, "w": 24, "x": 0, "y": 6 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "targets": [
+        { "expr": "pipeline_image_resolution_height" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Count of Objects",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 12 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "targets": [
+        { "expr": "pipeline_objects_count", "legendFormat": "count" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Number of Segments",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 20 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "targets": [
+        { "expr": "pipeline_num_segments", "legendFormat": "segments" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Number of Different Object Types",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 28 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "targets": [
+        { "expr": "pipeline_num_object_types", "legendFormat": "types" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Average Segment Resolution (px)",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 36 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "targets": [
+        { "expr": "pipeline_avg_segment_resolution", "legendFormat": "avg area" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Classifier Min Confidence",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 44 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "targets": [
+        { "expr": "pipeline_classifier_min_confidence", "legendFormat": "min confidence" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Classifier Confidence per Segment",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 52 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "targets": [
+        {
+          "expr": "pipeline_classifier_confidence",
+          "legendFormat": "segment {{segment_index}}"
+        }
+      ],
+      "legend": {"displayMode": "table", "placement": "bottom"}
+    },
+    {
+      "type": "timeseries",
+      "title": "Objects by Type",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 62 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "targets": [
+        {
+          "expr": "sum by (object_type) (pipeline_objects_by_type)",
+          "legendFormat": "{{object_type}}"
+        }
+      ],
+      "legend": {"displayMode": "table", "placement": "bottom"}
+    },
+    {
+      "type": "stat",
+      "title": "Type of Object Counted (indicator)",
+      "gridPos": { "h": 6, "w": 24, "x": 0, "y": 72 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "targets": [
+        { "expr": "sum by (object_type) (pipeline_type_of_object_counted)", "legendFormat": "{{object_type}}" }
+      ],
+      "options": { "textMode": "name" }
+    },
+    {
+      "type": "stat",
+      "title": "Models Used",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 78 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "targets": [
+        {
+          "expr": "pipeline_models_used",
+          "legendFormat": "SAM: {{sam_variant}} | CLF: {{classifier_id}} | ZS: {{zero_shot_id}}"
+        }
+      ],
+      "options": {
+        "textMode": "name"
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "SAM Inference Time (ms)",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 86 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "targets": [
+        { "expr": "pipeline_sam_inference_ms", "legendFormat": "sam" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Classifier Inference Time (ms)",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 94 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "targets": [
+        { "expr": "pipeline_classifier_inference_ms", "legendFormat": "classifier" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Zero-shot Inference Time (ms)",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 102 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "targets": [
+        { "expr": "pipeline_zeroshot_inference_ms", "legendFormat": "zero-shot" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Overall Response Time (ms)",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 110 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "targets": [
+        { "expr": "pipeline_overall_response_ms", "legendFormat": "overall" }
+      ]
+    }
+  ]
+}
+
+

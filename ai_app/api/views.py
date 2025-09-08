@@ -15,6 +15,7 @@ from .serializers import (
     CorrectionRequestSerializer,
 )
 from pipeline.model import SamSegmentationClassifier
+from .metrics import record_pipeline_metrics
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +64,14 @@ class CountView(APIView):
             try:
                 pipeline_run.image_path = res.image.path
                 output = pipeline_run.run()
+                # Record Prometheus metrics using metadata and label counts
+                try:
+                    record_pipeline_metrics(
+                        output.get("metadata", {}), output.get(
+                            "label_counts", {})
+                    )
+                except Exception:
+                    logger.exception("Failed to record Prometheus metrics")
                 res.predicted_count = output.get(
                     "label_counts", {}).get(res.object_type)
                 # Save panoptic image into MEDIA_ROOT and store URL in meta
@@ -82,7 +91,8 @@ class CountView(APIView):
                     except Exception:
                         logger.exception(
                             "Failed to copy panoptic image to media.")
-                meta.update(output.get("meta", {}))
+                # Merge pipeline metadata into the stored meta
+                meta.update(output.get("metadata", {}))
                 res.meta = meta
                 res.status = "predicted"
                 res.save()

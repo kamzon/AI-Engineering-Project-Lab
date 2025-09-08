@@ -1,5 +1,6 @@
 import os
 import uuid
+import time
 import urllib.request
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -15,6 +16,12 @@ from transformers import (
     AutoModelForImageClassification,
     pipeline as hf_pipeline,
 )
+
+# Local metrics collector
+try:
+    from .metrics import MetricsCollector  # type: ignore
+except Exception:  # pragma: no cover - fallback for direct script execution
+    from metrics import MetricsCollector  # type: ignore
 
 
 class ModelConstants:
@@ -75,6 +82,7 @@ class SamSegmentationClassifier:
         self.show_plots = show_plots
         self.candidate_labels = ModelConstants.DEFAULT_CANDIDATE_LABELS
 
+        self._original_image: Optional[Image.Image] = None
         self._image: Optional[Image.Image] = None
         self._image_tensor: Optional[torch.Tensor] = None
         self._sam_model = None
@@ -86,6 +94,7 @@ class SamSegmentationClassifier:
         self._zero_shot_labels: Optional[List[str]] = None
         self._image_processor: Optional[AutoImageProcessor] = None
         self._class_model: Optional[AutoModelForImageClassification] = None
+        self._classifier_confidences: Optional[List[float]] = None
 
     def _ensure_sam_checkpoint(self) -> None:
         if not os.path.exists(ModelConstants.SAM_CHECKPOINT_FILENAME):
@@ -96,7 +105,8 @@ class SamSegmentationClassifier:
 
     def _load_image(self) -> Image.Image:
         if self._image is None:
-            image = Image.open(self.image_path).convert("RGB")
+            self._original_image = Image.open(self.image_path)
+            image = self._original_image.convert("RGB")
             target_longest_side = ModelConstants.IMAGE_LONGEST_SIDE
             width, height = image.size
             longest_side = max(width, height)
@@ -277,6 +287,7 @@ class SamSegmentationClassifier:
             self.crop_segments()
         self._init_classifier()
         predicted_classes: List[str] = []
+        classifier_confidences: List[float] = []
         assert self._segments is not None
         assert self._image_processor is not None
         assert self._class_model is not None
@@ -294,8 +305,16 @@ class SamSegmentationClassifier:
                 predicted_class_idx = int(logits.argmax(-1).item())
                 predicted_class = self._class_model.config.id2label[predicted_class_idx]
                 predicted_classes.append(predicted_class)
+                # Softmax max probability as confidence
+                try:
+                    probs = torch.softmax(logits, dim=-1)
+                    conf = float(probs.max(dim=-1).values.item())
+                    classifier_confidences.append(conf)
+                except Exception:
+                    classifier_confidences.append(float("nan"))
 
         self._predicted_classes = predicted_classes
+        self._classifier_confidences = classifier_confidences
         return predicted_classes
 
     def zero_shot_labels(self) -> List[str]:
@@ -398,12 +417,26 @@ class SamSegmentationClassifier:
             plt.show()
 
     def run(self, do_zero_shot: bool = True, visualize: bool = False) -> Dict[str, Any]:
+        overall_t0 = time.perf_counter()
+
+        # SAM: mask generation (+ basic postprocessing)
+        t0 = time.perf_counter()
         self.generate_masks()
         self.build_panoptic_map()
         self.crop_segments()
+        sam_ms = (time.perf_counter() - t0) * 1000.0
+
+        # Classifier
+        t0 = time.perf_counter()
         self.classify_segments()
+        classifier_ms = (time.perf_counter() - t0) * 1000.0
+
+        # Zero-shot (optional)
+        zero_shot_ms = 0.0
         if do_zero_shot:
+            t0 = time.perf_counter()
             self.zero_shot_labels()
+            zero_shot_ms = (time.perf_counter() - t0) * 1000.0
 
         if visualize or self.show_plots:
             self.plot_original_and_panoptic()
@@ -413,6 +446,33 @@ class SamSegmentationClassifier:
         panoptic_path = os.path.join("pipeline", "outputs", f"{run_id}.png")
         self.save_panoptic_map_image(
             panoptic_path, labels=self._zero_shot_labels, annotate=True)
+
+        # Build models metadata
+        models_used: Dict[str, Any] = {
+            "sam": {
+                "variant": ModelConstants.SAM_VARIANT,
+                "checkpoint": ModelConstants.SAM_CHECKPOINT_FILENAME,
+            },
+            "classifier": {"id": ModelConstants.IMAGE_MODEL_ID},
+            "zero_shot": {"id": ModelConstants.ZERO_SHOT_MODEL_ID},
+        }
+
+        # Collect run metrics
+        metrics_collector = MetricsCollector()
+        metadata = metrics_collector.build(
+            image=self._original_image,
+            segments=self._segments,
+            zero_shot_labels=self._zero_shot_labels,
+            predicted_classes=self._predicted_classes,
+            models_used=models_used,
+            classifier_confidences=self._classifier_confidences,
+            timings_ms={
+                "sam_ms": sam_ms,
+                "classifier_ms": classifier_ms,
+                "zero_shot_ms": zero_shot_ms,
+                "overall_ms": (time.perf_counter() - overall_t0) * 1000.0,
+            },
+        )
         result: Dict[str, Any] = {
             # "image": self._image,
             # "panoptic_map": self._panoptic_map,
@@ -422,6 +482,7 @@ class SamSegmentationClassifier:
             "label_counts": self.count_candidate_labels(),
             "id": run_id,
             "panoptic_path": panoptic_path,
+            "metadata": metadata,
         }
         return result
 
