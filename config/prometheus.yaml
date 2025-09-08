@@ -14,9 +14,8 @@ scrape_configs:
     honor_timestamps: true
     scrape_interval: 15s
     scrape_timeout: 10s
-    metrics_path: /metrics
+    metrics_path: /prometheus/metrics
     scheme: http
     static_configs:
       - targets:
-          - host.docker.internal:5000
-          - localhost:5000
+          - host.docker.internal:8000

@@ -37,6 +37,7 @@ urlpatterns = [
         SpectacularRedocView.as_view(url_name="schema"),
         name="docs",
     ),
+    path("prometheus/", include("django_prometheus.urls")),
 ]
 
 if settings.DEBUG:
