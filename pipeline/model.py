@@ -113,11 +113,9 @@ class Pipeline:
             "predicted_classes": self._predicted_classes,
             "zero_shot_labels": self._zero_shot_labels,
         }
-    def run(self, do_zero_shot: bool = True, visualize: bool = False) -> Dict[str, Any]:
-        overall_t0 = time.perf_counter()
 
+    def _step_sam(self) -> float:
         t0 = time.perf_counter()
-
         sam_utils = SamMaskUtils(
             device=self.device,
             points_per_side=self.points_per_side,
@@ -134,16 +132,18 @@ class Pipeline:
         img_tensor = self._to_image_tensor()
         self._segments = SamMaskUtils.crop_segments(
             img_tensor, self._panoptic_map, self.background_fill)
-        sam_ms = (time.perf_counter() - t0) * 1000.0
+        return (time.perf_counter() - t0) * 1000.0
 
+    def _step_classifier(self) -> float:
         t0 = time.perf_counter()
         assert self._segments is not None
         classifier = ResNetImageClassifier(device=self.device)
         self._predicted_classes, self._classifier_confidences = classifier.classify(
             self._segments
         )
-        classifier_ms = (time.perf_counter() - t0) * 1000.0
+        return (time.perf_counter() - t0) * 1000.0
 
+    def _step_zero_shot(self, do_zero_shot: bool) -> float:
         zero_shot_ms = 0.0
         if do_zero_shot:
             t0 = time.perf_counter()
@@ -153,14 +153,17 @@ class Pipeline:
                 self._predicted_classes, self.candidate_labels
             )
             zero_shot_ms = (time.perf_counter() - t0) * 1000.0
+        return zero_shot_ms
 
-        run_id = uuid.uuid4().hex
+    def _step_save_panoptic(self, run_id: str) -> str:
         panoptic_path = os.path.join("pipeline", "outputs", f"{run_id}.png")
         assert self._panoptic_map is not None
         PanopticVisualizer().save(
             self._panoptic_map, panoptic_path, labels=self._zero_shot_labels, annotate=True)
+        return panoptic_path
 
-        models_used: Dict[str, Any] = {
+    def _build_models_used(self) -> Dict[str, Any]:
+        return {
             "sam": {
                 "variant": ModelConstants.SAM_VARIANT,
                 "checkpoint": ModelConstants.SAM_CHECKPOINT_FILENAME,
@@ -169,13 +172,21 @@ class Pipeline:
             "zero_shot": {"id": ModelConstants.ZERO_SHOT_MODEL_ID},
         }
 
+    def _build_label_counts(self) -> Dict[str, int]:
+        return {
+            label: sum(1 for l in (
+                self._zero_shot_labels or []) if l == label)
+            for label in self.candidate_labels
+        }
+
+    def _step_metrics(self, sam_ms: float, classifier_ms: float, zero_shot_ms: float, overall_t0: float) -> Dict[str, Any]:
         metrics_collector = MetricsCollector()
         metadata = metrics_collector.build(
             image=self._original_image,
             segments=self._segments,
             zero_shot_labels=self._zero_shot_labels,
             predicted_classes=self._predicted_classes,
-            models_used=models_used,
+            models_used=self._build_models_used(),
             classifier_confidences=self._classifier_confidences,
             timings_ms={
                 "sam_ms": sam_ms,
@@ -184,14 +195,21 @@ class Pipeline:
                 "overall_ms": (time.perf_counter() - overall_t0) * 1000.0,
             },
         )
+        return metadata
+
+    def run(self, do_zero_shot: bool = True) -> Dict[str, Any]:
+        overall_t0 = time.perf_counter()
+        sam_ms = self._step_sam()
+        classifier_ms = self._step_classifier()
+        zero_shot_ms = self._step_zero_shot(do_zero_shot)
+        run_id = uuid.uuid4().hex
+        panoptic_path = self._step_save_panoptic(run_id)
+        metadata = self._step_metrics(
+            sam_ms, classifier_ms, zero_shot_ms, overall_t0)
         result: Dict[str, Any] = {
             "predicted_classes": self._predicted_classes,
             "zero_shot_labels": self._zero_shot_labels,
-            "label_counts": {
-                label: sum(1 for l in (
-                    self._zero_shot_labels or []) if l == label)
-                for label in self.candidate_labels
-            },
+            "label_counts": self._build_label_counts(),
             "id": run_id,
             "panoptic_path": panoptic_path,
             "metadata": metadata,
