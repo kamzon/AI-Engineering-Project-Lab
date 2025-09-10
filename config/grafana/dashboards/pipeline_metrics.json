@@ -39,22 +39,35 @@
       ]
     },
     {
-      "type": "timeseries",
+      "type": "gauge",
       "title": "Number of Segments",
       "gridPos": { "h": 8, "w": 24, "x": 0, "y": 20 },
       "datasource": { "type": "prometheus", "uid": "Prometheus" },
       "targets": [
-        { "expr": "pipeline_num_segments", "legendFormat": "segments" }
-      ]
+        { "expr": "pipeline_num_segments", "legendFormat": "segments", "instant": true }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
+      }
     },
     {
-      "type": "timeseries",
+      "type": "stat",
       "title": "Number of Different Object Types",
       "gridPos": { "h": 8, "w": 24, "x": 0, "y": 28 },
       "datasource": { "type": "prometheus", "uid": "Prometheus" },
       "targets": [
-        { "expr": "pipeline_num_object_types", "legendFormat": "types" }
-      ]
+        { "expr": "pipeline_num_object_types", "legendFormat": "types", "instant": true }
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "value"
+      }
     },
     {
       "type": "timeseries",
@@ -75,54 +88,75 @@
       ]
     },
     {
-      "type": "timeseries",
+      "type": "bargauge",
       "title": "Classifier Confidence per Segment",
       "gridPos": { "h": 10, "w": 24, "x": 0, "y": 52 },
       "datasource": { "type": "prometheus", "uid": "Prometheus" },
       "targets": [
         {
           "expr": "pipeline_classifier_confidence",
-          "legendFormat": "segment {{segment_index}}"
+          "legendFormat": "segment {{segment_index}}",
+          "instant": true
         }
       ],
-      "legend": {"displayMode": "table", "placement": "bottom"}
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+      }
     },
     {
-      "type": "timeseries",
+      "type": "piechart",
       "title": "Objects by Type",
       "gridPos": { "h": 10, "w": 24, "x": 0, "y": 62 },
       "datasource": { "type": "prometheus", "uid": "Prometheus" },
       "targets": [
         {
           "expr": "sum by (object_type) (pipeline_objects_by_type)",
-          "legendFormat": "{{object_type}}"
+          "legendFormat": "{{object_type}}",
+          "instant": true
         }
       ],
-      "legend": {"displayMode": "table", "placement": "bottom"}
+      "options": {
+        "legend": { "displayMode": "list", "placement": "right" },
+        "pieType": "pie",
+        "displayLabels": ["name", "percent", "value"],
+        "tooltip": { "mode": "single", "sort": "desc" },
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+      }
     },
     {
-      "type": "stat",
+      "type": "piechart",
       "title": "Type of Object Counted (indicator)",
       "gridPos": { "h": 6, "w": 24, "x": 0, "y": 72 },
       "datasource": { "type": "prometheus", "uid": "Prometheus" },
       "targets": [
-        { "expr": "sum by (object_type) (pipeline_type_of_object_counted)", "legendFormat": "{{object_type}}" }
+        { "expr": "sum by (object_type) (pipeline_type_of_object_counted)", "legendFormat": "{{object_type}}", "instant": true }
       ],
-      "options": { "textMode": "name" }
+      "options": {
+        "legend": { "displayMode": "list", "placement": "right" },
+        "pieType": "pie",
+        "displayLabels": ["name", "percent", "value"],
+        "tooltip": { "mode": "single", "sort": "desc" },
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+      }
     },
     {
-      "type": "stat",
+      "type": "bargauge",
       "title": "Models Used",
       "gridPos": { "h": 8, "w": 24, "x": 0, "y": 78 },
       "datasource": { "type": "prometheus", "uid": "Prometheus" },
       "targets": [
         {
           "expr": "pipeline_models_used",
-          "legendFormat": "SAM: {{sam_variant}} | CLF: {{classifier_id}} | ZS: {{zero_shot_id}}"
+          "legendFormat": "SAM: {{sam_variant}} | CLF: {{classifier_id}} | ZS: {{zero_shot_id}}",
+          "instant": true
         }
       ],
       "options": {
-        "textMode": "name"
+        "orientation": "horizontal",
+        "displayMode": "basic",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
       }
     },
     {
