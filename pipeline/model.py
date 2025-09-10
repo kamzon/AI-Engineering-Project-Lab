@@ -64,7 +64,6 @@ class SamSegmentationClassifier:
                 try:
                     resample = Image.Resampling.LANCZOS
                 except AttributeError:
-                    # Fallbacks for older/newer Pillow versions without static attributes in stubs
                     resample = (
                         getattr(Image, "LANCZOS", None)
                         or getattr(Image, "BICUBIC", 0)
@@ -80,7 +79,7 @@ class SamSegmentationClassifier:
             self._image_tensor = transform(self._load_image())
         return self._image_tensor
 
-    # No wrapper methods; helpers are used directly in run() and plotting
+
 
     def correct_predictions(
         self,
@@ -118,8 +117,8 @@ class SamSegmentationClassifier:
     def run(self, do_zero_shot: bool = True, visualize: bool = False) -> Dict[str, Any]:
         overall_t0 = time.perf_counter()
 
-        # SAM: mask generation (+ basic postprocessing)
         t0 = time.perf_counter()
+
         sam_utils = SamMaskUtils(
             device=self.device,
             points_per_side=self.points_per_side,
@@ -138,7 +137,6 @@ class SamSegmentationClassifier:
             img_tensor, self._panoptic_map, self.background_fill)
         sam_ms = (time.perf_counter() - t0) * 1000.0
 
-        # Classifier
         t0 = time.perf_counter()
         assert self._segments is not None
         classifier = ResNetImageClassifier(device=self.device)
@@ -147,7 +145,6 @@ class SamSegmentationClassifier:
         )
         classifier_ms = (time.perf_counter() - t0) * 1000.0
 
-        # Zero-shot (optional)
         zero_shot_ms = 0.0
         if do_zero_shot:
             t0 = time.perf_counter()
@@ -164,7 +161,6 @@ class SamSegmentationClassifier:
         PanopticVisualizer().save(
             self._panoptic_map, panoptic_path, labels=self._zero_shot_labels, annotate=True)
 
-        # Build models metadata
         models_used: Dict[str, Any] = {
             "sam": {
                 "variant": ModelConstants.SAM_VARIANT,
@@ -174,7 +170,6 @@ class SamSegmentationClassifier:
             "zero_shot": {"id": ModelConstants.ZERO_SHOT_MODEL_ID},
         }
 
-        # Collect run metrics
         metrics_collector = MetricsCollector()
         metadata = metrics_collector.build(
             image=self._original_image,
@@ -191,9 +186,6 @@ class SamSegmentationClassifier:
             },
         )
         result: Dict[str, Any] = {
-            # "image": self._image,
-            # "panoptic_map": self._panoptic_map,
-            # "segments": self._segments,
             "predicted_classes": self._predicted_classes,
             "zero_shot_labels": self._zero_shot_labels,
             "label_counts": {

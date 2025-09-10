@@ -2,17 +2,14 @@ from typing import List
 
 
 class ModelConstants:
-    # SAM
     SAM_VARIANT: str = "vit_b"
     SAM_CHECKPOINT_FILENAME: str = "sam_vit_b_01ec64.pth"
     SAM_CHECKPOINT_URL: str = (
         "https://dl.fbaipublicfiles.com/segment_anything/sam_vit_b_01ec64.pth"
     )
 
-    # Image classification
     IMAGE_MODEL_ID: str = "microsoft/resnet-50"
 
-    # Image resizing
     IMAGE_LONGEST_SIDE: int = 1024
 
     DEFAULT_CANDIDATE_LABELS: List[str] = [
@@ -30,7 +27,6 @@ class ModelConstants:
         "building", "road", "sky", "ground", "water"
     ]
 
-    # Zero-shot classification
     ZERO_SHOT_MODEL_ID: str = "typeform/distilbert-base-uncased-mnli"
 
 
