@@ -218,7 +218,7 @@ class GenerateView(APIView):
             "Generates an image containing specified objects using the real image generation script. "
             "Returns the created Result with a link to the generated image."
         ),
-        request=CorrectionRequestSerializer,  # You may want a custom serializer for this
+        request=".serializers.GenerationRequestSerializer",
         responses={
             201: ResultSerializer,
             400: OpenApiResponse(description="Missing or invalid parameters"),
@@ -235,48 +235,58 @@ class GenerateView(APIView):
         ],
     )
     def post(self, request):
-        # Accept object_type and num_objects from the request
-        object_type = request.data.get("object_type")
-        num_objects = int(request.data.get("num_objects", 1))
-        if not object_type or object_type not in OBJECT_TYPES:
-            return Response({"error": "Invalid or missing object_type."}, status=400)
-        if num_objects < 1:
-            return Response({"error": "num_objects must be >= 1."}, status=400)
-
-        # Build prompt and generate image
-        chosen_types = [object_type] * num_objects
-        background = random.choice(BACKGROUND_TYPES)
-        blur = 0
-        rotate = random.choice([0, 90, 180, 270])
-        noise = 0
-        prompt = f"A {background} background with " + ", ".join(chosen_types)
-        try:
-            img = generate_image_with_api(prompt, api_key=API_KEY)
-            img = augment_image(img, blur=blur, rotate=rotate, noise=noise)
-            correct_count = num_objects
-            if img is None:
-                return Response({"error": "Image generation failed."}, status=500)
-            buf = io.BytesIO()
-            img.save(buf, format='PNG')
-            buf.seek(0)
-            files = {'image': ('test.png', buf, 'image/png')}
-            data = {'object_type': object_type}
-            upload_resp = requests.post(API_UPLOAD_ENDPOINT, files=files, data=data)
-            if not upload_resp.ok:
-                return Response({"error": upload_resp.text}, status=500)
-            result = upload_resp.json()
-            correction_data = {
-                "result_id": result["id"],
-                "corrected_count": correct_count
-            }
-            corr_resp = requests.post(API_CORRECT_ENDPOINT, data=correction_data)
-            return Response({
-                "result": result,
-                "correction_status": corr_resp.status_code,
-                "correction_response": corr_resp.text
-            }, status=201)
-        except Exception as e:
-            return Response({"error": str(e)}, status=500)
+        from .serializers import GenerationRequestSerializer
+        input_serializer = GenerationRequestSerializer(data=request.data)
+        if not input_serializer.is_valid():
+            return Response(input_serializer.errors, status=400)
+        v = input_serializer.validated_data
+        num_images = v["num_images"]
+        max_objects_per_image = v["max_objects_per_image"]
+        object_types = v["object_types"]
+        backgrounds = v["backgrounds"]
+        blur = v["blur"]
+        rotate_choices = v["rotate"]
+        noise = v["noise"]
+        results = []
+        for _ in range(num_images):
+            num_objects = random.randint(1, max_objects_per_image)
+            chosen_types = random.choices(object_types, k=num_objects)
+            background = random.choice(backgrounds)
+            rotate = random.choice(rotate_choices)
+            prompt = f"A {background} background with " + ", ".join(chosen_types)
+            try:
+                img = generate_image_with_api(prompt, api_key=API_KEY)
+                img = augment_image(img, blur=blur, rotate=rotate, noise=noise)
+                if img is None or not chosen_types:
+                    results.append({"error": "Image generation failed or no objects."})
+                    continue
+                buf = io.BytesIO()
+                img.save(buf, format='PNG')
+                buf.seek(0)
+                # For perfect correction: always send the correct count for the posted object_type
+                posted_object_type = chosen_types[0]
+                correct_count = sum(1 for t in chosen_types if t == posted_object_type)
+                files = {'image': ('test.png', buf, 'image/png')}
+                data = {'object_type': posted_object_type}
+                upload_resp = requests.post(API_UPLOAD_ENDPOINT, files=files, data=data)
+                if not upload_resp.ok:
+                    results.append({"error": upload_resp.text})
+                    continue
+                result = upload_resp.json()
+                correction_data = {
+                    "result_id": result["id"],
+                    "corrected_count": correct_count
+                }
+                corr_resp = requests.post(API_CORRECT_ENDPOINT, data=correction_data)
+                results.append({
+                    "result": result,
+                    "correction_status": corr_resp.status_code,
+                    "correction_response": corr_resp.text,
+                    "correction_sent": {"object_type": posted_object_type, "corrected_count": correct_count}
+                })
+            except Exception as e:
+                results.append({"error": str(e)})
+        return Response({"results": results}, status=201)
         
         
 @api_view(["POST"])

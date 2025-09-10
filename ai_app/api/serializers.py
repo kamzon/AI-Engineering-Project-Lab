@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from rest_framework import serializers
 from django.conf import settings
 from records.models import Result
 
@@ -31,8 +32,7 @@ class CountRequestSerializer(serializers.Serializer):
         allow_empty=False,
         help_text="Multiple images to analyze (repeat field in multipart).",
     )
-    object_type = serializers.ChoiceField(
-        choices=settings.OBJECT_TYPES,
+    object_type = serializers.CharField(
         help_text="Which object type to count in the image.",
     )
 
@@ -51,3 +51,22 @@ class CorrectionRequestSerializer(serializers.Serializer):
         help_text="ID of the Result to update.")
     corrected_count = serializers.IntegerField(
         min_value=0, help_text="Corrected number of objects.")
+
+
+class GenerationRequestSerializer(serializers.Serializer):
+    num_images = serializers.IntegerField(min_value=1, default=1)
+    max_objects_per_image = serializers.IntegerField(min_value=1, default=1)
+    object_types = serializers.ListField(
+        child=serializers.CharField(),
+        min_length=1
+    )
+    backgrounds = serializers.ListField(
+        child=serializers.CharField(),
+        min_length=1
+    )
+    blur = serializers.FloatField(min_value=0, default=0)
+    rotate = serializers.ListField(
+        child=serializers.IntegerField(),
+        min_length=1
+    )
+    noise = serializers.FloatField(min_value=0, default=0)

@@ -5,8 +5,9 @@ from django.http import JsonResponse
 
 def index(request):
     object_types = getattr(settings, "OBJECT_TYPES", [])
+    background_types = ["random", "solid", "noise"]
     latest = Result.objects.order_by("-created_at").first()
-    return render(request, "index.html", {"latest": latest, "object_types": object_types})
+    return render(request, "index.html", {"latest": latest, "object_types": object_types, "background_types": background_types})
 
 def history(request):
     # Return all results as JSON for the "Show history" button

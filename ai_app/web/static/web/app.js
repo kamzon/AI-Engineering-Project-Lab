@@ -4,15 +4,93 @@
   const generateBtnLabel = generateBtn?.querySelector(".btn-label");
   const generateBtnSpinner = generateBtn?.querySelector(".loading-spinner");
   const generateStatus = document.getElementById("generateStatus");
-  const genObjectType = document.getElementById("genObjectType");
-  const genNumObjects = document.getElementById("genNumObjects");
+  const genNumImages = document.getElementById("genNumImages");
+  const genMaxObjects = document.getElementById("genMaxObjects");
+  // Tag input for object types
+  const genObjectTypeInput = document.getElementById("genObjectTypeInput");
+  const addObjectTypeBtn = document.getElementById("addObjectTypeBtn");
+  const genObjectTypesTags = document.getElementById("genObjectTypesTags");
+  let objectTypes = [];
+  function renderObjectTypes() {
+    genObjectTypesTags.innerHTML = objectTypes.map((ot, i) =>
+      `<span class="badge badge-info badge-lg flex items-center">${ot} <button type="button" class="ml-1 text-lg font-bold remove-ot" data-idx="${i}">&times;</button></span>`
+    ).join("");
+  }
+  function addObjectType(val) {
+    val = val.trim();
+    if (val && !objectTypes.includes(val)) {
+      objectTypes.push(val);
+      renderObjectTypes();
+    }
+  }
+  genObjectTypeInput?.addEventListener("keydown", e => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      addObjectType(genObjectTypeInput.value);
+      genObjectTypeInput.value = "";
+    }
+  });
+  addObjectTypeBtn?.addEventListener("click", () => {
+    addObjectType(genObjectTypeInput.value);
+    genObjectTypeInput.value = "";
+  });
+  genObjectTypesTags?.addEventListener("click", e => {
+    if (e.target.classList.contains("remove-ot")) {
+      const idx = parseInt(e.target.dataset.idx, 10);
+      objectTypes.splice(idx, 1);
+      renderObjectTypes();
+    }
+  });
+
+  // Tag input for backgrounds
+  const genBackgroundInput = document.getElementById("genBackgroundInput");
+  const addBackgroundBtn = document.getElementById("addBackgroundBtn");
+  const genBackgroundsTags = document.getElementById("genBackgroundsTags");
+  let backgrounds = [];
+  function renderBackgrounds() {
+    genBackgroundsTags.innerHTML = backgrounds.map((bg, i) =>
+      `<span class="badge badge-secondary badge-lg flex items-center">${bg} <button type="button" class="ml-1 text-lg font-bold remove-bg" data-idx="${i}">&times;</button></span>`
+    ).join("");
+  }
+  function addBackground(val) {
+    val = val.trim();
+    if (val && !backgrounds.includes(val)) {
+      backgrounds.push(val);
+      renderBackgrounds();
+    }
+  }
+  genBackgroundInput?.addEventListener("keydown", e => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      addBackground(genBackgroundInput.value);
+      genBackgroundInput.value = "";
+    }
+  });
+  addBackgroundBtn?.addEventListener("click", () => {
+    addBackground(genBackgroundInput.value);
+    genBackgroundInput.value = "";
+  });
+  genBackgroundsTags?.addEventListener("click", e => {
+    if (e.target.classList.contains("remove-bg")) {
+      const idx = parseInt(e.target.dataset.idx, 10);
+      backgrounds.splice(idx, 1);
+      renderBackgrounds();
+    }
+  });
+  const genBlur = document.getElementById("genBlur");
+  const genRotate = document.getElementById("genRotate");
+  const genNoise = document.getElementById("genNoise");
 
   if (generateForm) {
     generateForm.addEventListener("submit", async (e) => {
       e.preventDefault();
-      const objectType = genObjectType.value;
-      const numObjects = genNumObjects.value;
-      if (!objectType || !numObjects) return;
+      const numImages = genNumImages.value;
+      const maxObjects = genMaxObjects.value;
+  if (!objectTypes.length || !backgrounds.length) return;
+      const blur = genBlur.value;
+      const rotate = Array.from(genRotate.selectedOptions).map(o => parseInt(o.value, 10));
+      const noise = genNoise.value;
+      if (!numImages || !maxObjects || !objectTypes.length || !backgrounds.length || !rotate.length) return;
       const csrf = getCSRF();
       generateBtn.disabled = true;
       if (generateBtnLabel && generateBtnSpinner) {
@@ -26,17 +104,27 @@
             "Content-Type": "application/json",
             "X-CSRFToken": csrf
           },
-          body: JSON.stringify({ object_type: objectType, num_objects: numObjects })
+          body: JSON.stringify({
+            num_images: parseInt(numImages, 10),
+            max_objects_per_image: parseInt(maxObjects, 10),
+            object_types: objectTypes,
+            backgrounds: backgrounds,
+            blur: parseFloat(blur),
+            rotate: rotate,
+            noise: parseFloat(noise)
+          })
         });
         const data = await resp.json();
         if (!resp.ok) {
           generateStatus.textContent = `Error: ${data.error || JSON.stringify(data)}`;
         } else {
-          generateStatus.textContent = "Image generated and uploaded.";
-          // Optionally, show the result in the UI
-          if (data.result) {
+          generateStatus.textContent = "Images generated and uploaded.";
+          // Show all results
+          if (data.results) {
             resultsList.innerHTML = "";
-            resultsList.insertAdjacentHTML("beforeend", resultItemHTML(data.result, csrf));
+            data.results.forEach(r => {
+              if (r.result) resultsList.insertAdjacentHTML("beforeend", resultItemHTML(r.result, csrf));
+            });
           }
         }
       } catch (err) {
