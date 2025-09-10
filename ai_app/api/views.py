@@ -72,6 +72,7 @@ class CountView(APIView):
                 image=uploaded_image, object_type=object_type, status="processing")
             try:
                 pipeline_run.image_path = res.image.path
+                pipeline_run.candidate_labels = [res.object_type, 'other']
                 output = pipeline_run.run()
                 try:
                     record_pipeline_metrics(
