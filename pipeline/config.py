@@ -29,4 +29,10 @@ class ModelConstants:
 
     ZERO_SHOT_MODEL_ID: str = "typeform/distilbert-base-uncased-mnli"
 
+    FEW_SHOT_LR: float = 1e-4
+    FEW_SHOT_WEIGHT_DECAY: float = 0.0
+    FEW_SHOT_MAX_EPOCHS: int = 3
+    FEW_SHOT_BATCH_SIZE: int = 8
+    FEW_SHOT_FREEZE_BACKBONE: bool = True
+
 

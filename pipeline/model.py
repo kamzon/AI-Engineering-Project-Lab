@@ -15,7 +15,7 @@ from pipeline.utils.masks import SamMaskUtils
 from pipeline.utils.visualization import PanopticVisualizer
 
 
-class SamSegmentationClassifier:
+class Pipeline:
 
     def __init__(
         self,
@@ -27,7 +27,6 @@ class SamSegmentationClassifier:
         min_mask_region_area: int = 500,
         background_fill: int = 188,
         device: Optional[str] = None,
-        show_plots: bool = False,
     ) -> None:
         self.image_path = image_path
         self.top_n = top_n
@@ -36,8 +35,8 @@ class SamSegmentationClassifier:
         self.stability_score_thresh = stability_score_thresh
         self.min_mask_region_area = min_mask_region_area
         self.background_fill = background_fill
-        self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
-        self.show_plots = show_plots
+        self.device = device or (
+            "cuda" if torch.cuda.is_available() else "cpu")
         self.candidate_labels = ModelConstants.DEFAULT_CANDIDATE_LABELS
 
         self._original_image: Optional[Image.Image] = None
@@ -201,6 +200,6 @@ class SamSegmentationClassifier:
 
 
 if __name__ == "__main__":
-    pipeline_runner = SamSegmentationClassifier()
+    pipeline_runner = Pipeline()
     pipeline_runner.image_path = "pipeline/inputs/image2.jpg"
     print(pipeline_runner.run())

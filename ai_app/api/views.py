@@ -14,7 +14,7 @@ from .serializers import (
     CountRequestSerializer,
     CorrectionRequestSerializer,
 )
-from pipeline.model import SamSegmentationClassifier
+from pipeline.model import Pipeline
 from .metrics import record_pipeline_metrics
 
 logger = logging.getLogger(__name__)
@@ -58,7 +58,7 @@ class CountView(APIView):
         images_list = validated.get("images")
 
         def process_one(uploaded_image):
-            pipeline_run = SamSegmentationClassifier()
+            pipeline_run = Pipeline()
             res = Result.objects.create(
                 image=uploaded_image, object_type=object_type, status="processing")
             try:
