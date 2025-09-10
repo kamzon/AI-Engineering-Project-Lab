@@ -1,3 +1,57 @@
+  // --- Generate Image with AI ---
+  const generateForm = document.getElementById("generateForm");
+  const generateBtn = document.getElementById("generateBtn");
+  const generateBtnLabel = generateBtn?.querySelector(".btn-label");
+  const generateBtnSpinner = generateBtn?.querySelector(".loading-spinner");
+  const generateStatus = document.getElementById("generateStatus");
+  const genObjectType = document.getElementById("genObjectType");
+  const genNumObjects = document.getElementById("genNumObjects");
+
+  if (generateForm) {
+    generateForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const objectType = genObjectType.value;
+      const numObjects = genNumObjects.value;
+      if (!objectType || !numObjects) return;
+      const csrf = getCSRF();
+      generateBtn.disabled = true;
+      if (generateBtnLabel && generateBtnSpinner) {
+        generateBtnLabel.textContent = "Generating…";
+        generateBtnSpinner.classList.remove("hidden");
+      }
+      try {
+        const resp = await fetch("/api/generate/", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-CSRFToken": csrf
+          },
+          body: JSON.stringify({ object_type: objectType, num_objects: numObjects })
+        });
+        const data = await resp.json();
+        if (!resp.ok) {
+          generateStatus.textContent = `Error: ${data.error || JSON.stringify(data)}`;
+        } else {
+          generateStatus.textContent = "Image generated and uploaded.";
+          // Optionally, show the result in the UI
+          if (data.result) {
+            resultsList.innerHTML = "";
+            resultsList.insertAdjacentHTML("beforeend", resultItemHTML(data.result, csrf));
+          }
+        }
+      } catch (err) {
+        generateStatus.textContent = `Error: ${err}`;
+      } finally {
+        generateBtn.disabled = false;
+        if (generateBtnLabel && generateBtnSpinner) {
+          generateBtnLabel.textContent = "Generate";
+          generateBtnSpinner.classList.add("hidden");
+        }
+        setTimeout(() => (generateStatus.textContent = ""), 2000);
+        generateForm.reset();
+      }
+    });
+  }
 function getCSRF() {
   const el = document.querySelector("#uploadForm input[name='csrfmiddlewaretoken']");
   return el ? el.value : "";

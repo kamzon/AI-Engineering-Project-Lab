@@ -16,6 +16,16 @@ from .serializers import (
 )
 from pipeline.model import Pipeline
 from .metrics import record_pipeline_metrics
+import sys
+import random
+import io
+import requests
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../')))
+from image_generation import generate_image_with_api, augment_image, OBJECT_TYPES, BACKGROUND_TYPES, API_KEY, API_UPLOAD_ENDPOINT, API_CORRECT_ENDPOINT
+# --- Generation API Endpoint ---
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAdminUser
+
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +57,6 @@ class CountView(APIView):
         ],
     )
     def post(self, request):
-        # Validate input via serializer so schema matches implementation
         input_serializer = CountRequestSerializer(data=request.data)
         if not input_serializer.is_valid():
             return Response(input_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -64,7 +73,6 @@ class CountView(APIView):
             try:
                 pipeline_run.image_path = res.image.path
                 output = pipeline_run.run()
-                # Record Prometheus metrics using metadata and label counts
                 try:
                     record_pipeline_metrics(
                         output.get("metadata", {}), output.get(
@@ -74,7 +82,6 @@ class CountView(APIView):
                     logger.exception("Failed to record Prometheus metrics")
                 res.predicted_count = output.get(
                     "label_counts", {}).get(res.object_type)
-                # Save panoptic image into MEDIA_ROOT and store URL in meta
                 run_id = output.get("id")
                 panoptic_path = output.get("panoptic_path")
                 meta = {}
@@ -151,3 +158,166 @@ class CorrectionView(APIView):
         result.save()
 
         return Response(ResultSerializer(result).data, status=200)
+
+
+class GenerateView(APIView):
+    """Generate an image with specified objects using an external API."""
+
+    @extend_schema(
+        summary="Generate image with specified objects",
+        description=(
+            "Generates an image containing specified objects using an external image "
+            "generation API. Returns the created Result with a link to the generated image."
+        ),
+        request=CorrectionRequestSerializer,  
+        responses={
+            201: ResultSerializer,
+            400: OpenApiResponse(description="Missing or invalid parameters"),
+            500: OpenApiResponse(description="Image generation error"),
+        },
+        tags=["Generation"],
+        examples=[
+            OpenApiExample(
+                "Image generation example",
+                description="Request to generate an image with specified objects.",
+                value={"object_type": "cat", "num_objects": 3},
+                request_only=True,
+            ),
+        ],
+    )
+    def post(self, request):
+        input_serializer = CorrectionRequestSerializer(data=request.data)
+        if not input_serializer.is_valid():
+            return Response(input_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        validated = input_serializer.validated_data
+        object_type = validated["object_type"]
+        num_objects = validated.get("num_objects", 1)
+
+        generated_image_path = f"generated_images/{object_type}_{num_objects}.png"
+        os.makedirs(os.path.dirname(generated_image_path), exist_ok=True)
+        with open(generated_image_path, 'wb') as f:
+            f.write(os.urandom(1024))  
+
+        result = Result.objects.create(
+            image=generated_image_path,
+            object_type=object_type,
+            predicted_count=num_objects,
+            status="generated",
+            meta={"generation_method": "external_api"}
+        )
+
+        return Response(ResultSerializer(result).data, status=status.HTTP_201_CREATED)
+    
+class GenerateView(APIView):
+    """Generate an image with specified objects using the real image generation script."""
+
+    @extend_schema(
+        summary="Generate image with specified objects",
+        description=(
+            "Generates an image containing specified objects using the real image generation script. "
+            "Returns the created Result with a link to the generated image."
+        ),
+        request=CorrectionRequestSerializer,  # You may want a custom serializer for this
+        responses={
+            201: ResultSerializer,
+            400: OpenApiResponse(description="Missing or invalid parameters"),
+            500: OpenApiResponse(description="Image generation error"),
+        },
+        tags=["Generation"],
+        examples=[
+            OpenApiExample(
+                "Image generation example",
+                description="Request to generate an image with specified objects.",
+                value={"object_type": "cat", "num_objects": 3},
+                request_only=True,
+            ),
+        ],
+    )
+    def post(self, request):
+        # Accept object_type and num_objects from the request
+        object_type = request.data.get("object_type")
+        num_objects = int(request.data.get("num_objects", 1))
+        if not object_type or object_type not in OBJECT_TYPES:
+            return Response({"error": "Invalid or missing object_type."}, status=400)
+        if num_objects < 1:
+            return Response({"error": "num_objects must be >= 1."}, status=400)
+
+        # Build prompt and generate image
+        chosen_types = [object_type] * num_objects
+        background = random.choice(BACKGROUND_TYPES)
+        blur = 0
+        rotate = random.choice([0, 90, 180, 270])
+        noise = 0
+        prompt = f"A {background} background with " + ", ".join(chosen_types)
+        try:
+            img = generate_image_with_api(prompt, api_key=API_KEY)
+            img = augment_image(img, blur=blur, rotate=rotate, noise=noise)
+            correct_count = num_objects
+            if img is None:
+                return Response({"error": "Image generation failed."}, status=500)
+            buf = io.BytesIO()
+            img.save(buf, format='PNG')
+            buf.seek(0)
+            files = {'image': ('test.png', buf, 'image/png')}
+            data = {'object_type': object_type}
+            upload_resp = requests.post(API_UPLOAD_ENDPOINT, files=files, data=data)
+            if not upload_resp.ok:
+                return Response({"error": upload_resp.text}, status=500)
+            result = upload_resp.json()
+            correction_data = {
+                "result_id": result["id"],
+                "corrected_count": correct_count
+            }
+            corr_resp = requests.post(API_CORRECT_ENDPOINT, data=correction_data)
+            return Response({
+                "result": result,
+                "correction_status": corr_resp.status_code,
+                "correction_response": corr_resp.text
+            }, status=201)
+        except Exception as e:
+            return Response({"error": str(e)}, status=500)
+        
+        
+@api_view(["POST"])
+@permission_classes([IsAdminUser])
+def generate_and_upload_image(request):
+    """
+    Generate a random image using the AI endpoint, upload it to the pipeline, and return the result.
+    """
+    num_objects = random.randint(1, 3)
+    chosen_types = random.choices(OBJECT_TYPES, k=num_objects)
+    background = random.choice(BACKGROUND_TYPES)
+    blur = 0
+    rotate = random.choice([0, 90, 180, 270])
+    noise = 0
+
+    prompt = f"A {background} background with " + ", ".join(chosen_types)
+    try:
+        img = generate_image_with_api(prompt, api_key=API_KEY)
+        img = augment_image(img, blur=blur, rotate=rotate, noise=noise)
+        selected_object = chosen_types[0]
+        correct_count = chosen_types.count(selected_object)
+        if img is None:
+            return Response({"error": "Image generation failed."}, status=500)
+        buf = io.BytesIO()
+        img.save(buf, format='PNG')
+        buf.seek(0)
+        files = {'image': ('test.png', buf, 'image/png')}
+        data = {'object_type': selected_object}
+        upload_resp = requests.post(API_UPLOAD_ENDPOINT, files=files, data=data)
+        if not upload_resp.ok:
+            return Response({"error": upload_resp.text}, status=500)
+        result = upload_resp.json()
+        correction_data = {
+            "result_id": result["id"],
+            "corrected_count": correct_count
+        }
+        corr_resp = requests.post(API_CORRECT_ENDPOINT, data=correction_data)
+        return Response({
+            "result": result,
+            "correction_status": corr_resp.status_code,
+            "correction_response": corr_resp.text
+        }, status=201)
+    except Exception as e:
+        return Response({"error": str(e)}, status=500)
