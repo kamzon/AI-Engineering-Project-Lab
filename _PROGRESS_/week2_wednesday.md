@@ -12,4 +12,4 @@
 | Ensure the backend recieve params for the image generation as user input(object types, number of images, backgournd, blur, noise, ...) | Noureddine      |               | Completed   |
 | automatically call the old count endpoints and make a correction logic to correct the output                                           | Noureddine      |               | Completed   |
 | Updated the frontend UI to use the new backend endpoint, with dynamic tag-style inputs                                                 | Noureddine      |               | Completed   |
-| Debugging 🥲                                                                                                                            | Noureddine      |               | Completed   |
+| Debugging 🥲                                                                                                                            | Noureddine      |               | In progress   |
