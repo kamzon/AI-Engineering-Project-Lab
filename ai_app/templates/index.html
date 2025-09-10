@@ -1,6 +1,6 @@
 {% load static %}
 <!doctype html>
-<html data-theme="winter" class="bg-base-200">
+<html data-theme="{{ current_theme|default:'winter' }}" class="bg-base-200">
 <head>
   <meta charset="utf-8">
   <title>Object Counter</title>
@@ -9,7 +9,22 @@
 </head>
 <body class="bg-base-200">
   <main class="max-w-4xl mx-auto px-4 my-7">
-    <h1 class="text-3xl font-semibold mb-1">Object Counter</h1>
+    <div class="flex items-center justify-between mb-1">
+      <h1 class="text-3xl font-semibold">Object Counter</h1>
+      <div class="form-control w-44">
+        <label class="label" for="themeSelect">
+          <span class="label-text">Theme</span>
+        </label>
+        <select id="themeSelect" class="select select-bordered select-sm">
+          <option value="winter" {% if current_theme=='winter' %}selected{% endif %}>winter</option>
+          <option value="dracula" {% if current_theme=='dracula' %}selected{% endif %}>dracula</option>
+          <option value="forest" {% if current_theme=='forest' %}selected{% endif %}>forest</option>
+          <option value="dim" {% if current_theme=='dim' %}selected{% endif %}>dim</option>
+          <option value="night" {% if current_theme=='night' %}selected{% endif %}>night</option>
+          <option value="halloween" {% if current_theme=='halloween' %}selected{% endif %}>halloween</option>
+        </select>
+      </div>
+    </div>
     <p class="text-base-content/60 mb-5">Upload an image, select an object type, and get a quick count. Submit
       corrections
       if needed.</p>
@@ -20,44 +35,64 @@
       <form id="generateForm" class="space-y-4">
         {% csrf_token %}
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label class="block mb-1 text-base-content/60 font-medium">Number of images</label>
+          <div class="form-control">
+            <label class="label">
+              <span class="label-text">Number of images</span>
+              <span class="label-text-alt text-base-content/60">min 1</span>
+            </label>
             <input class="input input-bordered w-full" type="number" name="num_images" id="genNumImages" min="1" value="1" required />
           </div>
-          <div>
-            <label class="block mb-1 text-base-content/60 font-medium">Max objects per image</label>
+          <div class="form-control">
+            <label class="label">
+              <span class="label-text">Max objects per image</span>
+              <span class="label-text-alt text-base-content/60">min 1</span>
+            </label>
             <input class="input input-bordered w-full" type="number" name="max_objects_per_image" id="genMaxObjects" min="1" value="3" required />
           </div>
         </div>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label class="block mb-1 text-base-content/60 font-medium">Object types (add any, press Enter or Add)</label>
+          <div class="form-control">
+            <label class="label">
+              <span class="label-text">Object types</span>
+              <span class="label-text-alt text-base-content/60">Type and press Enter or Add</span>
+            </label>
             <div class="flex flex-col gap-2">
-              <div class="flex gap-2">
-                <input class="input input-bordered flex-1" type="text" id="genObjectTypeInput" placeholder="Type and press Enter or Add" />
-                <button type="button" id="addObjectTypeBtn" class="btn btn-outline btn-sm">Add</button>
+              <div class="join w-full">
+                <input class="input input-bordered join-item w-full" type="text" id="genObjectTypeInput"
+                  placeholder="Add object type" />
+                <button type="button" id="addObjectTypeBtn" class="btn btn-outline join-item">Add</button>
               </div>
               <div id="genObjectTypesTags" class="flex flex-wrap gap-2"></div>
             </div>
           </div>
-          <div>
-            <label class="block mb-1 text-base-content/60 font-medium">Backgrounds (add any, press Enter or Add)</label>
+          <div class="form-control">
+            <label class="label">
+              <span class="label-text">Backgrounds</span>
+              <span class="label-text-alt text-base-content/60">Type and press Enter or Add</span>
+            </label>
             <div class="flex flex-col gap-2">
-              <div class="flex gap-2">
-                <input class="input input-bordered flex-1" type="text" id="genBackgroundInput" placeholder="Type and press Enter or Add" />
-                <button type="button" id="addBackgroundBtn" class="btn btn-outline btn-sm">Add</button>
+              <div class="join w-full">
+                <input class="input input-bordered join-item w-full" type="text" id="genBackgroundInput"
+                  placeholder="Add background" />
+                <button type="button" id="addBackgroundBtn" class="btn btn-outline join-item">Add</button>
               </div>
               <div id="genBackgroundsTags" class="flex flex-wrap gap-2"></div>
             </div>
           </div>
         </div>
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
-            <label class="block mb-1 text-base-content/60 font-medium">Blur</label>
+          <div class="form-control">
+            <label class="label">
+              <span class="label-text">Blur</span>
+              <span class="label-text-alt text-base-content/60">0 = none</span>
+            </label>
             <input class="input input-bordered w-full" type="number" step="0.1" name="blur" id="genBlur" min="0" value="0" required />
           </div>
-          <div>
-            <label class="block mb-1 text-base-content/60 font-medium">Rotate (select multiple)</label>
+          <div class="form-control">
+            <label class="label">
+              <span class="label-text">Rotate</span>
+              <span class="label-text-alt text-base-content/60">Select one or more</span>
+            </label>
             <select class="select select-bordered w-full h-32" name="rotate" id="genRotate" multiple required>
               <option value="0">0</option>
               <option value="90">90</option>
@@ -65,17 +100,20 @@
               <option value="270">270</option>
             </select>
           </div>
-          <div>
-            <label class="block mb-1 text-base-content/60 font-medium">Noise</label>
+          <div class="form-control">
+            <label class="label">
+              <span class="label-text">Noise</span>
+              <span class="label-text-alt text-base-content/60">0 = none</span>
+            </label>
             <input class="input input-bordered w-full" type="number" step="0.1" name="noise" id="genNoise" min="0" value="0" required />
           </div>
         </div>
-        <div class="flex gap-2 justify-end mt-6">
-          <button type="submit" id="generateBtn" class="btn btn-accent btn-md">
+        <div class="flex gap-2 justify-end mt-6 items-center">
+          <span id="generateStatus" class="text-base-content/60"></span>
+          <button type="submit" id="generateBtn" class="btn btn-primary btn-md">
             <span class="btn-label">Generate</span>
             <span class="loading loading-spinner loading-xs hidden"></span>
           </button>
-          <span id="generateStatus" class="text-base-content/60"></span>
         </div>
       </form>
     </section>
@@ -114,8 +152,8 @@
     <!-- Latest result -->
     <section class="bg-base-100 border border-base-300 rounded-xl p-4 shadow">
       <h2 class="text-lg font-medium mb-3">Latest result</h2>
-      {% if latest %}
-        <ul id="resultsList" class="list-none p-0 m-0 grid gap-3">
+      <ul id="resultsList" class="list-none p-0 m-0 grid gap-3">
+        {% if latest %}
           <li id="r-{{ latest.id }}" class="grid gap-4 border border-base-300 rounded-xl p-3 bg-base-100">
             <div class="grid grid-cols-1 md:grid-cols-[200px_1fr_240px] gap-3 items-center">
               <div>
@@ -151,8 +189,9 @@
             </figure>
             {% endif %}
           </li>
-        </ul>
-      {% else %}
+        {% endif %}
+      </ul>
+      {% if not latest %}
         <p class="text-base-content/60">No results yet.</p>
       {% endif %}
       <button id="showHistoryBtn" class="btn btn-sm mt-3">Show history</button>

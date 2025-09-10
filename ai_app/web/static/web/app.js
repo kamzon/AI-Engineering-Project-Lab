@@ -86,6 +86,7 @@
       e.preventDefault();
       const numImages = genNumImages.value;
       const maxObjects = genMaxObjects.value;
+      const resultsList = document.getElementById("resultsList");
   if (!objectTypes.length || !backgrounds.length) return;
       const blur = genBlur.value;
       const rotate = Array.from(genRotate.selectedOptions).map(o => parseInt(o.value, 10));
@@ -141,7 +142,7 @@
     });
   }
 function getCSRF() {
-  const el = document.querySelector("#uploadForm input[name='csrfmiddlewaretoken']");
+  const el = document.querySelector("input[name='csrfmiddlewaretoken']");
   return el ? el.value : "";
 }
 
@@ -197,6 +198,28 @@ function resultItemHTML(data, csrfToken) {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+  // Theme select handler
+  const themeSelect = document.getElementById("themeSelect");
+  if (themeSelect) {
+    themeSelect.addEventListener("change", async () => {
+      const theme = themeSelect.value;
+      document.documentElement.setAttribute("data-theme", theme);
+      const csrf = getCSRF();
+      try {
+        await fetch("/set-theme/", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-CSRFToken": csrf,
+          },
+          body: JSON.stringify({ theme }),
+        });
+      } catch (e) {
+        // no-op; UX remains with the selected theme client-side
+      }
+    });
+  }
+
   const uploadForm = document.getElementById("uploadForm");
   const uploadBtn = document.getElementById("uploadBtn");
   const uploadBtnLabel = uploadBtn.querySelector(".btn-label");
