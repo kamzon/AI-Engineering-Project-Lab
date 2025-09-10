@@ -1,0 +1,9 @@
+| **Task**                                                        | **Responsible** | **Resources** | **Status**  |
+| --------------------------------------------------------------- | --------------- | ------------- | ----------- |
+| implementing the few shot learning pipeline                     | Haidar Chaito   |               | Completed   |
+| cleanup the pipline and restructure it into modules             | Haidar Chaito   |               | Completed   |
+| create themes for the frontend and persist them in the database | Haidar Chaito   |               | Completed   |
+| update the grafana visualization to use variety of charts       | Haidar Chaito   |               | Completed   |
+| implementing the few shot learning pipeline                     | Haidar Chaito   |               | Completed   |
+| integrate the few shot model with the pipeline                  | Haidar Chaito   |               | In progress |
+| integrate the few shot model with the frontend                  | Haidar Chaito   |               | In progress |
