@@ -93,7 +93,5 @@ group-1/
 ```
 
 ## Troubleshooting
-- Docker metrics stack fails to start: ensure Docker Desktop is running and ports 9090/3000 are free.
-- Prometheus shows target down: verify Django is running and `/prometheus/metrics` is reachable.
-- Notebook GPU errors: set device to CPU if CUDA not available.
+
 
