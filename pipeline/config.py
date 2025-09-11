@@ -38,6 +38,6 @@ class ModelConstants:
     # Directory where a fine-tuned image classifier (and its processor) will be saved.
     # If this directory exists, the pipeline will load the classifier from here instead
     # of the base `IMAGE_MODEL_ID`.
-    FINETUNED_MODEL_DIR: str = "pipeline/finetuned/resnet_few_shot"
+    FINETUNED_MODEL_DIR: str = "pipeline/finetuned"
 
 

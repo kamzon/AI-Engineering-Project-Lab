@@ -1,217 +1,152 @@
-from typing import Dict, Iterable, List, Optional, Tuple
 import os
-
-import torch
-import torch.nn as nn
-import torch.optim as optim
-from PIL import Image
-from transformers import AutoImageProcessor, AutoModelForImageClassification
-
-from pipeline.config import ModelConstants
-
+import glob
+import shutil
+import numpy as np
+from PIL import Image as PILImage
+from sklearn.metrics import accuracy_score
+from datasets import Dataset, Image as HFImage
+from transformers import (
+    AutoImageProcessor,
+    ResNetForImageClassification,
+    TrainingArguments,
+    Trainer,
+    DefaultDataCollator,
+)
 
 class FewShotResNet:
     """
-    Few-shot binary fine-tuning wrapper around a pretrained image classifier.
-
-    - Loads base model and processor from ModelConstants.IMAGE_MODEL_ID
-    - Fine-tunes only the classification head (by default) to distinguish a
-      user-specified target object type vs "others" using provided images.
-    - Supports class weights derived from counts for imbalanced data.
-    - Provides classification for SAM segments: returns target label or "others".
+    A class to fine-tune a ResNet model for a binary classification task
+    (e.g., 'target_object' vs. 'others') from a list of image paths.
     """
-
     def __init__(
         self,
-        device: Optional[str] = None,
-        lr: float = ModelConstants.FEW_SHOT_LR,
-        weight_decay: float = ModelConstants.FEW_SHOT_WEIGHT_DECAY,
-        max_epochs: int = ModelConstants.FEW_SHOT_MAX_EPOCHS,
-        batch_size: int = ModelConstants.FEW_SHOT_BATCH_SIZE,
-        freeze_backbone: bool = ModelConstants.FEW_SHOT_FREEZE_BACKBONE,
-    ) -> None:
-        self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
-        self.lr = lr
-        self.weight_decay = weight_decay
-        self.max_epochs = max_epochs
-        self.batch_size = batch_size
-        self.freeze_backbone = freeze_backbone
-
-        self._model: Optional[nn.Module] = None
-        self._processor: Optional[AutoImageProcessor] = None
-        self._target_label: Optional[str] = None
-
-    def _freeze_all_but_head(self, model: nn.Module) -> None:
-        if not self.freeze_backbone:
-            return
-        for param in model.parameters():
-            param.requires_grad = False
-        head = getattr(model, "classifier", None) or getattr(model, "fc", None)
-        if head is not None:
-            for param in head.parameters():
-                param.requires_grad = True
-
-    def _build_binary_samples(
-        self,
-        target_label: str,
-        label_to_image_paths: Dict[str, List[str]],
-        label_to_counts: Optional[Dict[str, int]] = None,
-    ) -> Tuple[List[Tuple[str, int]], torch.Tensor]:
+        object_type: str,
+        model_checkpoint: str = "microsoft/resnet-50",
+        final_model_path: str = "pipeline/finetuned",
+    ):
         """
-        Build samples and compute class weights.
+        Initializes the fine-tuning pipeline.
 
-        Positive class (1): images under `target_label`.
-        Negative class (0): images under all other labels combined ("others").
-
-        If label_to_counts provided, derive weights inversely proportional
-        to positive/negative counts. Otherwise compute by number of images.
+        Args:
+            object_type (str): The name of the target class. This will be used to
+                               identify target images from their parent directory.
+            model_checkpoint (str): The name of the pre-trained model from Hugging Face Hub.
+            final_model_path (str): The path where the final fine-tuned model will be saved.
         """
-        positives = label_to_image_paths.get(target_label, [])
-        negatives: List[str] = []
-        for label, paths in label_to_image_paths.items():
-            if label != target_label:
-                negatives.extend(paths)
+        if not object_type or not isinstance(object_type, str):
+            raise ValueError("`object_type` must be a non-empty string.")
 
-        samples: List[Tuple[str, int]] = []
-        for p in positives:
-            samples.append((p, 1))
-        for n in negatives:
-            samples.append((n, 0))
+        self.object_type = object_type
+        self.labels = ["others", self.object_type] # Class 0 is 'others', Class 1 is the target
+        self.model_checkpoint = model_checkpoint
+        self.final_model_path = final_model_path
+        self.output_dir = "./checkpoints_resnet50"
 
-        # Class weights: index 0 for others, index 1 for target
-        if label_to_counts is not None:
-            pos_count = int(label_to_counts.get(target_label, len(positives)))
-            neg_count = int(sum(
-                label_to_counts.get(lbl, len(paths))
-                for lbl, paths in label_to_image_paths.items()
-                if lbl != target_label
-            ))
-        else:
-            pos_count = max(1, len(positives))
-            neg_count = max(1, len(negatives))
+        # Initialize attributes
+        self.image_processor = None
+        self.model = None
+        self.train_ds = None
+        self.eval_ds = None
 
-        total = pos_count + neg_count
-        # Inverse frequency weighting
-        weight_neg = total / (2.0 * neg_count)
-        weight_pos = total / (2.0 * pos_count)
-        class_weights = torch.tensor([weight_neg, weight_pos], dtype=torch.float)
-        return samples, class_weights
+        # Create label mappings
+        self.id2label = {i: label for i, label in enumerate(self.labels)}
+        self.label2id = {label: i for i, label in enumerate(self.labels)}
+        print(f"✅ FewShotResNet initialized for target: '{self.object_type}'")
 
-    def _collate(self, batch: List[Tuple[str, int]]):
-        assert self._processor is not None
-        images = []
-        targets = []
-        for path, target in batch:
-            img = Image.open(path).convert("RGB")
-            images.append(img)
-            targets.append(target)
-        proc = self._processor(images=images, return_tensors="pt")
-        pixel_values = proc["pixel_values"]
-        return pixel_values, torch.tensor(targets, dtype=torch.long)
-
-    def finetune_binary(
-        self,
-        target_label: str,
-        label_to_image_paths: Dict[str, List[str]],
-        label_to_counts: Optional[Dict[str, int]] = None,
-    ) -> nn.Module:
+    def load_data_from_paths(self, image_paths: list, test_size: float = 0.2):
         """
-        Fine-tune the classification head to distinguish `target_label` vs "others".
+        Loads images from a list of paths and labels them based on their
+        parent directory. It then splits the data into training and evaluation sets.
 
-        Inputs:
-        - target_label: the user-selected object type
-        - label_to_image_paths: mapping of label -> list of image file paths
-        - label_to_counts: optional mapping of label -> integer ground-truth count to
-          weight the loss (helps when datasets are imbalanced).
+        Args:
+            image_paths (list): A list of strings, where each string is a path to an image.
+            test_size (float): The proportion of the dataset to reserve for evaluation.
         """
-        self._target_label = target_label
-        self._processor = AutoImageProcessor.from_pretrained(ModelConstants.IMAGE_MODEL_ID)
-        model = AutoModelForImageClassification.from_pretrained(
-            ModelConstants.IMAGE_MODEL_ID,
-            num_labels=2,
+        print(f"🛠️ Loading data from {len(image_paths)} image paths...")
+        
+        labels = []
+        for path in image_paths:
+            # Extract the parent directory name from the path
+            parent_dir = os.path.basename(os.path.dirname(path))
+            # Assign label 1 if the directory matches the object_type, else 0
+            label = self.label2id[self.object_type] if parent_dir == self.object_type else self.label2id["others"]
+            labels.append(label)
+
+        # Create a Hugging Face Dataset
+        dataset = Dataset.from_dict({"image": image_paths, "label": labels}).cast_column("image", HFImage())
+        
+        # Split into training and evaluation sets
+        split_dataset = dataset.train_test_split(test_size=test_size)
+        self.train_ds = split_dataset["train"]
+        self.eval_ds = split_dataset["test"]
+        
+        print(f"✅ Data loaded and split. Training samples: {len(self.train_ds)}, Evaluation samples: {len(self.eval_ds)}")
+
+
+    def _load_model_and_processor(self):
+        """Loads the pre-trained model and its associated image processor."""
+        print(f"🛠️ Loading pre-trained model: {self.model_checkpoint}")
+        self.image_processor = AutoImageProcessor.from_pretrained(self.model_checkpoint)
+        self.model = ResNetForImageClassification.from_pretrained(
+            self.model_checkpoint,
+            num_labels=len(self.labels),
+            id2label=self.id2label,
+            label2id=self.label2id,
             ignore_mismatched_sizes=True,
-        ).to(self.device)
-
-        # Explicit single-label classification
-        model.config.problem_type = "single_label_classification"
-        model.config.label2id = {"others": 0, target_label: 1}
-        model.config.id2label = {0: "others", 1: target_label}
-
-        self._freeze_all_but_head(model)
-        params = [p for p in model.parameters() if p.requires_grad]
-        optimizer = optim.Adam(params, lr=self.lr, weight_decay=self.weight_decay)
-
-        samples, class_weights = self._build_binary_samples(
-            target_label, label_to_image_paths, label_to_counts
         )
-        class_weights = class_weights.to(self.device)
-        criterion = nn.CrossEntropyLoss(weight=class_weights)
 
-        model.train()
-        for _ in range(self.max_epochs):
-            for i in range(0, len(samples), self.batch_size):
-                batch = samples[i : i + self.batch_size]
-                pixel_values, targets = self._collate(batch)
-                pixel_values = pixel_values.to(self.device)
-                targets = targets.to(self.device)
-                optimizer.zero_grad()
-                outputs = model(pixel_values=pixel_values)
-                logits = outputs.logits
-                loss = criterion(logits, targets)
-                loss.backward()
-                optimizer.step()
+    def _transform_data(self, example_batch):
+        """Applies the image processor to a batch of examples."""
+        inputs = self.image_processor(example_batch['image'], return_tensors='pt')
+        inputs['label'] = example_batch['label']
+        return inputs
 
-        self._model = model.eval()
+    @staticmethod
+    def _compute_metrics(eval_pred):
+        """Computes accuracy metric for evaluation."""
+        logits, labels = eval_pred
+        predictions = np.argmax(logits, axis=-1)
+        return {"accuracy": accuracy_score(labels, predictions)}
 
-        # Persist artifacts for reuse
-        save_dir = ModelConstants.FINETUNED_MODEL_DIR
-        os.makedirs(save_dir, exist_ok=True)
-        try:
-            self._model.save_pretrained(save_dir)
-            assert self._processor is not None
-            self._processor.save_pretrained(save_dir)
-        except Exception:
-            pass
-
-        return self._model
-
-    def classify_segments(
-        self,
-        segments: Iterable[torch.Tensor],
-        threshold: float = 0.5,
-    ) -> Tuple[List[str], List[float]]:
+    def finetune(self, num_train_epochs: int = 3, per_device_batch_size: int = 8):
         """
-        Classify SAM-produced segments as target or "others".
-
-        Returns two lists aligned with input order: predicted label, confidence.
-        If model has 2 labels, confidence is the softmax prob of the predicted class.
+        Executes the full fine-tuning pipeline.
         """
-        assert self._model is not None
-        if self._processor is None:
-            self._processor = AutoImageProcessor.from_pretrained(ModelConstants.IMAGE_MODEL_ID)
+        if not self.train_ds or not self.eval_ds:
+            raise ValueError("Data not loaded. Please call `load_data_from_paths()` first.")
+        
+        self._load_model_and_processor()
+        
+        self.train_ds.set_transform(self._transform_data)
+        self.eval_ds.set_transform(self._transform_data)
+        
+        training_args = TrainingArguments(
+            output_dir=self.output_dir,
+            num_train_epochs=num_train_epochs,
+            per_device_train_batch_size=per_device_batch_size,
+            per_device_eval_batch_size=per_device_batch_size,
+            evaluation_strategy="epoch",
+            save_strategy="epoch",
+            logging_steps=10,
+            load_best_model_at_end=True,
+            metric_for_best_model="accuracy",
+            remove_unused_columns=False,
+        )
 
-        predicted_labels: List[str] = []
-        confidences: List[float] = []
-        self._model.eval()
-        with torch.no_grad():
-            for segment in segments:
-                # segment expected CHW tensor [C,H,W] in uint8 or float [0,1]
-                if segment.dtype != torch.uint8:
-                    segment = (segment.clamp(0, 1) * 255.0).to(torch.uint8)
-                img_hwc = segment.permute(1, 2, 0).cpu().numpy()
-                inputs = self._processor(images=img_hwc, return_tensors="pt")
-                inputs = {k: v.to(self.device) for k, v in inputs.items()}
-                outputs = self._model(**inputs)
-                logits = outputs.logits
-                probs = torch.softmax(logits, dim=-1)
-                conf, idx = probs.max(dim=-1)
-                idx_int = int(idx.item())
-                conf_float = float(conf.item())
-                label = self._model.config.id2label.get(idx_int, "others")
-                # Optional thresholding: if not confident, call it others
-                if conf_float < threshold:
-                    label = "others"
-                predicted_labels.append(label)
-                confidences.append(conf_float)
-        return predicted_labels, confidences
+        trainer = Trainer(
+            model=self.model,
+            args=training_args,
+            train_dataset=self.train_ds,
+            eval_dataset=self.eval_ds,
+            tokenizer=self.image_processor,
+            compute_metrics=self._compute_metrics,
+            data_collator=DefaultDataCollator(),
+        )
 
+        print("🚀 Starting fine-tuning...")
+        trainer.train()
+
+        print(f"✅ Training complete. Saving the best model to {self.final_model_path}")
+        os.makedirs(self.final_model_path, exist_ok=True)
+        trainer.save_model(self.final_model_path)
+        print("✨ Model saved successfully!")

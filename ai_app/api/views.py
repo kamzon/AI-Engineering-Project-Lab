@@ -206,76 +206,68 @@ class GenerateView(APIView):
         rotate_choices = v["rotate"]
         noise_pct = int(v["noise"]) if v.get("noise") is not None else 0
         results = []
-        # Build dataset mapping: class_name -> [image_path, ...]
-        class_to_image_paths = {}
-        # Save under MEDIA_ROOT/fewshot_dataset/<class>/image.png
+        # Save under MEDIA_ROOT/fewshot_dataset/<class>/image.png and MEDIA_ROOT/fewshot_dataset/others/image.png
         dataset_root = (settings.MEDIA_ROOT / "fewshot_dataset")
-        dataset_root.mkdir(parents=True, exist_ok=True)
-        print("dataset_root is created")
+        (dataset_root / "others").mkdir(parents=True, exist_ok=True)
+        (dataset_root / object_types[0]).mkdir(parents=True, exist_ok=True)
+
+        positive_paths = []
+        negative_paths = []
+
         for _ in range(num_images):
             background = random.choice(backgrounds)
             rotate = random.choice(rotate_choices)
-            if num_objects_per_image == 1:
-                prompt = f"A {background} background with a single {object_types[0]}"
-            else:
-                prompt = f"A {background} background with {num_objects_per_image} objects of a {object_types[0]}s"
-            print("prompt is created")
-            print(prompt)
+            # Build one positive sample prompt that includes target
+            pos_prompt = f"A {background} background with {num_objects_per_image} {object_types[0]}"
             try:
-                print("generating image")
-                img = generate_image_with_api(prompt, api_key=API_KEY)
-                print("image generated")
-                #print(img)
-                # Map blur% to GaussianBlur radius (0–100 -> 0–10)
+                img = generate_image_with_api(pos_prompt, api_key=API_KEY)
                 blur_radius = round((max(0, min(100, blur_pct)) / 100.0) * 10.0, 2)
-                # Map noise% to std dev in [0, 50]
                 noise_std = round((max(0, min(100, noise_pct)) / 100.0) * 50.0, 2)
                 img = augment_image(img, blur=blur_radius, rotate=rotate, noise=noise_std)
-                print("img is created")
-                print(img)
-                print("object_types is created")
-                print(object_types[0])
-                if img is None or not object_types[0]:
-                    results.append({"error": "Image generation failed or no objects."})
-                    continue
-                # Choose one class label per image for few-shot supervision
-                labeled_class = object_types[0]
-                class_dir = dataset_root / labeled_class
-                class_dir.mkdir(parents=True, exist_ok=True)
-                print("class_dir is created")
-                filename = f"{labeled_class}_{random.randint(100000,999999)}.png"
-                img_path = class_dir / filename
-                img.save(img_path, format='PNG')
-                class_to_image_paths.setdefault(labeled_class, []).append(str(img_path))
-                print("class_to_image_paths is created")
-                print(class_to_image_paths)
-                results.append({
-                    "saved": True,
-                    "class": labeled_class,
-                    "path": str(img_path)
-                })
+                if img is None:
+                    results.append({"error": "Positive image generation failed."})
+                else:
+                    pos_dir = dataset_root / object_types[0]
+                    filename = f"pos_{random.randint(100000,999999)}.png"
+                    img_path = pos_dir / filename
+                    img.save(img_path, format='PNG')
+                    positive_paths.append(str(img_path))
+                    results.append({"saved": True, "class": object_types[0], "path": str(img_path)})
             except Exception as e:
-                print("error is created")
-                print(e)
                 results.append({"error": str(e)})
+
+            # Build one negative sample prompt that avoids the target (sample from defaults)
+            neg_candidates = [o for o in ModelConstants.DEFAULT_CANDIDATE_LABELS if o != object_types[0]]
+            chosen = random.sample(neg_candidates, k=min(num_objects_per_image, len(neg_candidates)))
+            neg_prompt = f"A {background} background with " + ", ".join(chosen)
+            try:
+                img = generate_image_with_api(neg_prompt, api_key=API_KEY)
+                img = augment_image(img, blur=blur_radius, rotate=rotate, noise=noise_std)
+                if img is None:
+                    results.append({"error": "Negative image generation failed."})
+                else:
+                    neg_dir = dataset_root / "others"
+                    filename = f"neg_{random.randint(100000,999999)}.png"
+                    img_path = neg_dir / filename
+                    img.save(img_path, format='PNG')
+                    negative_paths.append(str(img_path))
+                    results.append({"saved": True, "class": "others", "path": str(img_path)})
+            except Exception as e:
+                results.append({"error": str(e)})
+
         # After dataset is built, run few-shot fine-tuning and persist the model
         try:
-            fewshot = FewShotResNet(
-                lr=ModelConstants.FEW_SHOT_LR,
-                weight_decay=ModelConstants.FEW_SHOT_WEIGHT_DECAY,
-                max_epochs=ModelConstants.FEW_SHOT_MAX_EPOCHS,
-                batch_size=ModelConstants.FEW_SHOT_BATCH_SIZE,
-                freeze_backbone=ModelConstants.FEW_SHOT_FREEZE_BACKBONE,
+            image_paths = positive_paths + negative_paths
+            if not image_paths:
+                return Response({"results": results, "message": "No images generated."}, status=500)
+            trainer = FewShotResNet(object_type=object_types[0])
+            trainer.load_data_from_paths(image_paths=image_paths, test_size=0.2)
+            trainer.finetune(
+                num_train_epochs=ModelConstants.FEW_SHOT_MAX_EPOCHS,
+                per_device_batch_size=ModelConstants.FEW_SHOT_BATCH_SIZE,
             )
-            print("fewshot is created")
-            print(fewshot)
-            # Fine-tune binary classifier: target vs others
-            target_label = object_types[0] if object_types else ""
-            fewshot.finetune_binary(target_label=target_label, label_to_image_paths=class_to_image_paths)
             finetuned_dir = ModelConstants.FINETUNED_MODEL_DIR
         except Exception as e:
-            print("error is created")
-            print(e)
             return Response({
                 "results": results,
                 "message": "Dataset created but fine-tuning failed.",
@@ -284,8 +276,8 @@ class GenerateView(APIView):
 
         return Response({
             "results": results,
-            "classes": sorted(class_to_image_paths.keys()),
-            "images_per_class": {k: len(v) for k, v in class_to_image_paths.items()},
+            "positives": len(positive_paths),
+            "negatives": len(negative_paths),
             "finetuned_model_dir": finetuned_dir
         }, status=201)
         
