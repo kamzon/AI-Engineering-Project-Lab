@@ -10,6 +10,13 @@ class MetricsCollector:
         - If corrected_count is None → assume hit
         Returns None if DB/model import is unavailable.
         """
+        # Avoid touching Django models before apps are ready (e.g., during checks/tests)
+        try:
+            from django.apps import apps as django_apps  # type: ignore  # pylint: disable=import-outside-toplevel
+            if not getattr(django_apps, "ready", False):
+                return None
+        except Exception:
+            return None
         try:
             from records.models import Result  # type: ignore  # pylint: disable=import-outside-toplevel
         except Exception:
