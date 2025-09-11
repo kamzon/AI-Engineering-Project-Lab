@@ -9,13 +9,15 @@ test:
     - python --version
     - apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
     - pip install --upgrade pip setuptools wheel
-    - pip install -r requirements.txt
+  - pip install -r ai_app/requirements.txt
+  # If there are additional deps for the sibling pipeline package, install them too
+  - if [ -f pipeline/requirements.txt ]; then pip install -r pipeline/requirements.txt; fi
     - pip install coverage
   script:
-    - cd ai_app
-    - coverage run --source='.' manage.py test | cat
-    - coverage xml -o coverage.xml
-    - coverage html
+  - export PYTHONPATH="$PYTHONPATH:$PWD"
+  - coverage run --source='ai_app' ai_app/manage.py test | cat
+  - coverage xml -o ai_app/coverage.xml
+  - coverage html -d ai_app/htmlcov
     - coverage report -m | cat
   artifacts:
     when: always
