@@ -1,6 +1,7 @@
 import os
 import glob
 import shutil
+import io
 import numpy as np
 from PIL import Image as PILImage
 from sklearn.metrics import accuracy_score
@@ -72,8 +73,8 @@ class FewShotResNet:
             label = self.label2id[self.object_type] if parent_dir == self.object_type else self.label2id["others"]
             labels.append(label)
 
-        # Create a Hugging Face Dataset
-        dataset = Dataset.from_dict({"image": image_paths, "label": labels}).cast_column("image", HFImage())
+        # Create a Hugging Face Dataset using file paths; we'll open paths in transform
+        dataset = Dataset.from_dict({"image_path": image_paths, "label": labels})
         
         # Split into training and evaluation sets
         split_dataset = dataset.train_test_split(test_size=test_size)
@@ -97,14 +98,69 @@ class FewShotResNet:
 
     def _transform_data(self, example_batch):
         """Applies the image processor to a batch of examples."""
-        inputs = self.image_processor(example_batch['image'], return_tensors='pt')
-        inputs['label'] = example_batch['label']
+        # Determine batch size
+        batch_size = None
+        if 'label' in example_batch and isinstance(example_batch['label'], (list, tuple)):
+            batch_size = len(example_batch['label'])
+        elif 'labels' in example_batch and isinstance(example_batch['labels'], (list, tuple)):
+            batch_size = len(example_batch['labels'])
+
+        # Resolve images from various possible batch formats
+        images = example_batch.get('image')
+        if images is None and 'image_path' in example_batch:
+            paths = example_batch['image_path']
+            opened = []
+            for p in paths:
+                try:
+                    img = PILImage.open(p).convert('RGB')
+                except Exception:
+                    img = None
+                opened.append(img)
+            images = opened
+        elif images is None and 'pixel_values' in example_batch:
+            # Already transformed
+            out = {"pixel_values": example_batch['pixel_values']}
+            if 'label' in example_batch:
+                out['labels'] = example_batch['label']
+            elif 'labels' in example_batch:
+                out['labels'] = example_batch['labels']
+            return out
+        elif images is None:
+            images = example_batch.get('images') or example_batch.get('file')
+
+        # Ensure list form
+        if images is None:
+            images = []
+        if not isinstance(images, (list, tuple)):
+            images = [images]
+
+        # Replace any Nones with dummy images, also handle empty list using batch_size
+        def _dummy():
+            return PILImage.new('RGB', (256, 256), (0, 0, 0))
+
+        images = [img if isinstance(img, PILImage.Image) else (_dummy() if img is None else img) for img in images]
+        if batch_size is not None and len(images) == 0:
+            images = [_dummy() for _ in range(batch_size)]
+
+        inputs = self.image_processor(images, return_tensors='pt')
+        # Hugging Face Trainer expects 'labels'
+        if 'label' in example_batch:
+            inputs['labels'] = example_batch['label']
+        elif 'labels' in example_batch:
+            inputs['labels'] = example_batch['labels']
         return inputs
 
     @staticmethod
     def _compute_metrics(eval_pred):
         """Computes accuracy metric for evaluation."""
-        logits, labels = eval_pred
+        try:
+            # Newer HF passes EvalPrediction
+            logits = getattr(eval_pred, 'predictions', None)
+            labels = getattr(eval_pred, 'label_ids', None)
+            if logits is None or labels is None:
+                logits, labels = eval_pred
+        except Exception:
+            logits, labels = eval_pred
         predictions = np.argmax(logits, axis=-1)
         return {"accuracy": accuracy_score(labels, predictions)}
 
@@ -120,25 +176,35 @@ class FewShotResNet:
         self.train_ds.set_transform(self._transform_data)
         self.eval_ds.set_transform(self._transform_data)
         
-        training_args = TrainingArguments(
-            output_dir=self.output_dir,
-            num_train_epochs=num_train_epochs,
-            per_device_train_batch_size=per_device_batch_size,
-            per_device_eval_batch_size=per_device_batch_size,
-            evaluation_strategy="epoch",
-            save_strategy="epoch",
-            logging_steps=10,
-            load_best_model_at_end=True,
-            metric_for_best_model="accuracy",
-            remove_unused_columns=False,
-        )
+        try:
+            training_args = TrainingArguments(
+                output_dir=self.output_dir,
+                num_train_epochs=num_train_epochs,
+                per_device_train_batch_size=per_device_batch_size,
+                per_device_eval_batch_size=per_device_batch_size,
+                evaluation_strategy="epoch",
+                save_strategy="epoch",
+                logging_steps=10,
+                load_best_model_at_end=True,
+                metric_for_best_model="accuracy",
+                remove_unused_columns=False,
+            )
+        except TypeError as e:
+            print(f"ℹ️ Falling back to legacy TrainingArguments due to: {e}")
+            # Older transformers versions don't support evaluation/save strategies
+            training_args = TrainingArguments(
+                output_dir=self.output_dir,
+                num_train_epochs=num_train_epochs,
+                per_device_train_batch_size=per_device_batch_size,
+                per_device_eval_batch_size=per_device_batch_size,
+                logging_steps=10,
+            )
 
         trainer = Trainer(
             model=self.model,
             args=training_args,
             train_dataset=self.train_ds,
             eval_dataset=self.eval_ds,
-            tokenizer=self.image_processor,
             compute_metrics=self._compute_metrics,
             data_collator=DefaultDataCollator(),
         )
@@ -146,7 +212,21 @@ class FewShotResNet:
         print("🚀 Starting fine-tuning...")
         trainer.train()
 
+        # For older versions without evaluation during training, run an eval pass now
+        try:
+            if self.eval_ds is not None:
+                eval_metrics = trainer.evaluate()
+                print(f"📊 Evaluation metrics: {eval_metrics}")
+        except Exception as e:
+            print(f"⚠️ Post-training evaluation failed: {e}")
+
         print(f"✅ Training complete. Saving the best model to {self.final_model_path}")
         os.makedirs(self.final_model_path, exist_ok=True)
         trainer.save_model(self.final_model_path)
+        try:
+            # Persist the image processor so inference can load it from the same directory
+            if self.image_processor is not None:
+                self.image_processor.save_pretrained(self.final_model_path)
+        except Exception as e:
+            print(f"⚠️ Failed to save image processor: {e}")
         print("✨ Model saved successfully!")
