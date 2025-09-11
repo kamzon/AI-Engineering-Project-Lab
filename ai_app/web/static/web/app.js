@@ -33,6 +33,8 @@
       }
       const csrf = getCSRF();
       generateBtn.disabled = true;
+      const countBtn = document.getElementById("uploadBtn");
+      if (countBtn) countBtn.disabled = true;
       if (generateBtnLabel && generateBtnSpinner) {
         generateBtnLabel.textContent = "Generating…";
         generateBtnSpinner.classList.remove("hidden");
@@ -74,11 +76,25 @@
               if (r.result) resultsList.insertAdjacentHTML("beforeend", resultItemHTML(r.result, csrf));
             });
           }
+          // Lock Upload section object type to the generated type and disable it
+          const objectTypeSelect = document.getElementById("objectType");
+          if (objectTypeSelect) {
+            objectTypeSelect.innerHTML = "";
+            const opt = document.createElement("option");
+            opt.value = selectedType;
+            // Keep text simple; backend expects raw value
+            opt.textContent = selectedType;
+            objectTypeSelect.appendChild(opt);
+            objectTypeSelect.value = selectedType;
+            objectTypeSelect.disabled = true;
+          }
         }
       } catch (err) {
         generateStatus.textContent = `Error: ${err}`;
       } finally {
         generateBtn.disabled = false;
+        const countBtn = document.getElementById("uploadBtn");
+        if (countBtn) countBtn.disabled = false;
         if (generateBtnLabel && generateBtnSpinner) {
           generateBtnLabel.textContent = "Generate";
           generateBtnSpinner.classList.add("hidden");
@@ -192,6 +208,7 @@ document.addEventListener("DOMContentLoaded", () => {
     fd.append("object_type", objectType);
 
     uploadBtn.disabled = true;
+    if (generateBtn) generateBtn.disabled = true;
     if (uploadBtnLabel && uploadBtnSpinner) {
       uploadBtnLabel.textContent = "Processing…";
       uploadBtnSpinner.classList.remove("hidden");
@@ -220,6 +237,7 @@ document.addEventListener("DOMContentLoaded", () => {
       uploadStatus.textContent = `Error: ${err}`;
     } finally {
       uploadBtn.disabled = false;
+      if (generateBtn) generateBtn.disabled = false;
       if (uploadBtnLabel && uploadBtnSpinner) {
         uploadBtnLabel.textContent = "Count";
         uploadBtnSpinner.classList.add("hidden");
