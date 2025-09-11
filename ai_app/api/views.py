@@ -15,6 +15,8 @@ from .serializers import (
     CorrectionRequestSerializer,
 )
 from pipeline.pipeline import Pipeline
+from pipeline.models.few_shot import FewShotResNet
+from pipeline.config import ModelConstants
 from .metrics import record_pipeline_metrics
 import sys
 import random
@@ -211,13 +213,13 @@ class GenerateView(APIView):
         return Response(ResultSerializer(result).data, status=status.HTTP_201_CREATED)
     
 class GenerateView(APIView):
-    """Generate an image with specified objects using the real image generation script."""
+    """Generate images, then fine-tune the ResNet classifier using few-shot on them."""
 
     @extend_schema(
         summary="Generate image with specified objects",
         description=(
-            "Generates an image containing specified objects using the real image generation script. "
-            "Returns the created Result with a link to the generated image."
+            "Generates images with specified objects, saves them into a labeled dataset, "
+            "then fine-tunes the ResNet image classifier using few-shot learning."
         ),
         request=".serializers.GenerationRequestSerializer",
         responses={
@@ -249,6 +251,11 @@ class GenerateView(APIView):
         rotate_choices = v["rotate"]
         noise = v["noise"]
         results = []
+        # Build dataset mapping: class_name -> [image_path, ...]
+        class_to_image_paths = {}
+        # Save under MEDIA_ROOT/fewshot_dataset/<class>/image.png
+        dataset_root = (settings.MEDIA_ROOT / "fewshot_dataset")
+        dataset_root.mkdir(parents=True, exist_ok=True)
         for _ in range(num_images):
             num_objects = random.randint(1, max_objects_per_image)
             chosen_types = random.choices(object_types, k=num_objects)
@@ -261,33 +268,45 @@ class GenerateView(APIView):
                 if img is None or not chosen_types:
                     results.append({"error": "Image generation failed or no objects."})
                     continue
-                buf = io.BytesIO()
-                img.save(buf, format='PNG')
-                buf.seek(0)
-                # For perfect correction: always send the correct count for the posted object_type
-                posted_object_type = chosen_types[0]
-                correct_count = sum(1 for t in chosen_types if t == posted_object_type)
-                files = {'image': ('test.png', buf, 'image/png')}
-                data = {'object_type': posted_object_type}
-                upload_resp = requests.post(API_UPLOAD_ENDPOINT, files=files, data=data)
-                if not upload_resp.ok:
-                    results.append({"error": upload_resp.text})
-                    continue
-                result = upload_resp.json()
-                correction_data = {
-                    "result_id": result["id"],
-                    "corrected_count": correct_count
-                }
-                corr_resp = requests.post(API_CORRECT_ENDPOINT, data=correction_data)
+                # Choose one class label per image for few-shot supervision
+                labeled_class = chosen_types[0]
+                class_dir = dataset_root / labeled_class
+                class_dir.mkdir(parents=True, exist_ok=True)
+                filename = f"{labeled_class}_{random.randint(100000,999999)}.png"
+                img_path = class_dir / filename
+                img.save(img_path, format='PNG')
+                class_to_image_paths.setdefault(labeled_class, []).append(str(img_path))
                 results.append({
-                    "result": result,
-                    "correction_status": corr_resp.status_code,
-                    "correction_response": corr_resp.text,
-                    "correction_sent": {"object_type": posted_object_type, "corrected_count": correct_count}
+                    "saved": True,
+                    "class": labeled_class,
+                    "path": str(img_path)
                 })
             except Exception as e:
                 results.append({"error": str(e)})
-        return Response({"results": results}, status=201)
+        # After dataset is built, run few-shot fine-tuning and persist the model
+        try:
+            fewshot = FewShotResNet(
+                lr=ModelConstants.FEW_SHOT_LR,
+                weight_decay=ModelConstants.FEW_SHOT_WEIGHT_DECAY,
+                max_epochs=ModelConstants.FEW_SHOT_MAX_EPOCHS,
+                batch_size=ModelConstants.FEW_SHOT_BATCH_SIZE,
+                freeze_backbone=ModelConstants.FEW_SHOT_FREEZE_BACKBONE,
+            )
+            fewshot.finetune(class_to_image_paths)
+            finetuned_dir = ModelConstants.FINETUNED_MODEL_DIR
+        except Exception as e:
+            return Response({
+                "results": results,
+                "message": "Dataset created but fine-tuning failed.",
+                "error": str(e)
+            }, status=500)
+
+        return Response({
+            "results": results,
+            "classes": sorted(class_to_image_paths.keys()),
+            "images_per_class": {k: len(v) for k, v in class_to_image_paths.items()},
+            "finetuned_model_dir": finetuned_dir
+        }, status=201)
         
         
 @api_view(["POST"])

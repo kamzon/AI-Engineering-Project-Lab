@@ -1,4 +1,5 @@
 from typing import Dict, List, Optional, Tuple
+import os
 
 import torch
 import torch.nn as nn
@@ -64,9 +65,10 @@ class FewShotResNet:
                 p.requires_grad = True
 
     def finetune(self, class_to_image_paths: Dict[str, List[str]]) -> nn.Module:
+        print(f"Finetuning with {len(class_to_image_paths)} classes")
         samples, class_to_idx = self._build_dataset(class_to_image_paths)
         num_classes = len(class_to_idx)
-
+        print(f"Number of classes: {num_classes}")
         self._processor = AutoImageProcessor.from_pretrained(ModelConstants.IMAGE_MODEL_ID)
         model = AutoModelForImageClassification.from_pretrained(
             ModelConstants.IMAGE_MODEL_ID,
@@ -95,7 +97,20 @@ class FewShotResNet:
                 loss.backward()
                 optimizer.step()
 
+        # Switch to eval and persist the model + processor
         self._model = model.eval()
+
+        # Save fine-tuned weights and config to a directory for later reuse
+        save_dir = ModelConstants.FINETUNED_MODEL_DIR
+        os.makedirs(save_dir, exist_ok=True)
+        try:
+            self._model.save_pretrained(save_dir)
+            assert self._processor is not None
+            self._processor.save_pretrained(save_dir)
+        except Exception:
+            # If saving fails, still return the model for immediate use
+            pass
+
         return self._model
 
     def classify(self, segments: List[torch.Tensor]) -> Tuple[List[str], List[float]]:

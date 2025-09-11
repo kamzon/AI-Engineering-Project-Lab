@@ -5,6 +5,7 @@ import torch
 from transformers import AutoImageProcessor, AutoModelForImageClassification
 
 from pipeline.config import ModelConstants
+import os
 
 
 class ResNetImageClassifier:
@@ -15,11 +16,16 @@ class ResNetImageClassifier:
 
     def _init(self) -> None:
         if self._image_processor is None or self._class_model is None:
-            self._image_processor = AutoImageProcessor.from_pretrained(
-                ModelConstants.IMAGE_MODEL_ID
+            # Prefer a fine-tuned checkpoint if present
+            finetuned_dir = ModelConstants.FINETUNED_MODEL_DIR
+            load_source = (
+                finetuned_dir if os.path.isdir(finetuned_dir) and os.listdir(finetuned_dir)
+                else ModelConstants.IMAGE_MODEL_ID
             )
+            print(f"Loading classifier from {load_source}") 
+            self._image_processor = AutoImageProcessor.from_pretrained(load_source)
             self._class_model = AutoModelForImageClassification.from_pretrained(
-                ModelConstants.IMAGE_MODEL_ID
+                load_source
             ).to(self.device)
 
     def classify(self, segments: List[torch.Tensor]) -> Tuple[List[str], List[float]]:

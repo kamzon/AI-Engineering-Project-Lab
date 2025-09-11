@@ -163,12 +163,19 @@ class Pipeline:
         return panoptic_path
 
     def _build_models_used(self) -> Dict[str, Any]:
+        # Report whether a fine-tuned classifier was used
+        classifier_source = (
+            ModelConstants.FINETUNED_MODEL_DIR
+            if os.path.isdir(ModelConstants.FINETUNED_MODEL_DIR)
+            and os.listdir(ModelConstants.FINETUNED_MODEL_DIR)
+            else ModelConstants.IMAGE_MODEL_ID
+        )
         return {
             "sam": {
                 "variant": ModelConstants.SAM_VARIANT,
                 "checkpoint": ModelConstants.SAM_CHECKPOINT_FILENAME,
             },
-            "classifier": {"id": ModelConstants.IMAGE_MODEL_ID},
+            "classifier": {"id": classifier_source},
             "zero_shot": {"id": ModelConstants.ZERO_SHOT_MODEL_ID},
         }
 
