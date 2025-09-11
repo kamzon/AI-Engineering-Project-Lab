@@ -198,10 +198,10 @@ class GenerateView(APIView):
         print("input_serializer is valid")
         v = input_serializer.validated_data
         num_images = v["num_images"]
-        max_objects_per_image = v["max_objects_per_image"]
-        object_types = v["object_types"]
-        backgrounds = v["backgrounds"]
-        blur = v["blur"]
+        num_objects_per_image = v["max_objects_per_image"]
+        object_types = list(v.get("selected_type", []))  # Ensure a fresh copy is used
+        backgrounds = list(v.get("backgrounds", []))  # Ensure a fresh copy is used
+        blur = v.get("blur", 0)
         rotate_choices = v["rotate"]
         noise = v["noise"]
         results = []
@@ -212,28 +212,29 @@ class GenerateView(APIView):
         dataset_root.mkdir(parents=True, exist_ok=True)
         print("dataset_root is created")
         for _ in range(num_images):
-            num_objects = random.randint(1, max_objects_per_image)
-            chosen_types = random.choices(object_types, k=num_objects)
             background = random.choice(backgrounds)
             rotate = random.choice(rotate_choices)
-            prompt = f"A {background} background with {num_objects} " + ", ".join(chosen_types)
+            if num_objects_per_image == 1:
+                prompt = f"A {background} background with a single {object_types[0]}"
+            else:
+                prompt = f"A {background} background with {num_objects_per_image} objects of a {object_types[0]}s"
             print("prompt is created")
             print(prompt)
             try:
                 print("generating image")
                 img = generate_image_with_api(prompt, api_key=API_KEY)
                 print("image generated")
-                print(img)
+                #print(img)
                 img = augment_image(img, blur=blur, rotate=rotate, noise=noise)
                 print("img is created")
                 print(img)
-                print("chosen_types is created")
-                print(chosen_types)
-                if img is None or not chosen_types:
+                print("object_types is created")
+                print(object_types[0])
+                if img is None or not object_types[0]:
                     results.append({"error": "Image generation failed or no objects."})
                     continue
                 # Choose one class label per image for few-shot supervision
-                labeled_class = chosen_types[0]
+                labeled_class = object_types[0]
                 class_dir = dataset_root / labeled_class
                 class_dir.mkdir(parents=True, exist_ok=True)
                 print("class_dir is created")

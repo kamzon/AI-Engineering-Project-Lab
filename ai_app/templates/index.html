@@ -44,26 +44,22 @@
           </div>
           <div class="form-control">
             <label class="label">
-              <span class="label-text">Max objects per image</span>
+              <span class="label-text">Number of objects per image</span>
               <span class="label-text-alt text-base-content/60">min 1</span>
             </label>
-            <input class="input input-bordered w-full" type="number" name="max_objects_per_image" id="genMaxObjects" min="1" value="3" required />
+            <input class="input input-bordered w-full" type="number" name="max_objects_per_image" id="genMaxObjects" min="1" value="1" required />
           </div>
         </div>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div class="form-control">
             <label class="label">
-              <span class="label-text">Object types</span>
-              <span class="label-text-alt text-base-content/60">Type and press Enter or Add</span>
-            </label>
-            <div class="flex flex-col gap-2">
-              <div class="join w-full">
-                <input class="input input-bordered join-item w-full" type="text" id="genObjectTypeInput"
-                  placeholder="Add object type" />
-                <button type="button" id="addObjectTypeBtn" class="btn btn-outline join-item">Add</button>
-              </div>
-              <div id="genObjectTypesTags" class="flex flex-wrap gap-2"></div>
-            </div>
+              <label class="w-36 text-base-content/60" for="selectedType">selected type</label>
+                <select class="select select-bordered w-full" name="selected_type" id="selectedType" required>
+                  <option value="" disabled selected>Select type…</option>
+                  {% for ot in object_types %}
+                    <option value="{{ ot }}">{{ ot|title }}</option>
+                  {% endfor %}
+                </select>
           </div>
           <div class="form-control">
             <label class="label">
