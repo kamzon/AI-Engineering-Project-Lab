@@ -10,42 +10,43 @@ class MetricsCollector:
         - If corrected_count is None → assume hit
         Returns None if DB/model import is unavailable.
         """
-        # Avoid touching Django models before apps are ready (e.g., during checks/tests)
-        try:
-            from django.apps import apps as django_apps  # type: ignore  # pylint: disable=import-outside-toplevel
-            if not getattr(django_apps, "ready", False):
-                return None
-        except Exception:
-            return None
-        try:
-            from records.models import Result  # type: ignore  # pylint: disable=import-outside-toplevel
-        except Exception:
-            print("Error importing Result model")
-            return None
+        return 0
+        # # Avoid touching Django models before apps are ready (e.g., during checks/tests)
+        # try:
+        #     from django.apps import apps as django_apps  # type: ignore  # pylint: disable=import-outside-toplevel
+        #     if not getattr(django_apps, "ready", False):
+        #         return None
+        # except Exception:
+        #     return None
+        # try:
+        #     from records.models import Result  # type: ignore  # pylint: disable=import-outside-toplevel
+        # except Exception:
+        #     print("Error importing Result model")
+        #     return None
 
-        try:
-            queryset = Result.objects.all()
-            total: int = 0
-            hits: int = 0
-            for r in queryset:
-                predicted = getattr(r, "predicted_count", None)
-                corrected = getattr(r, "corrected_count", None)
-                # Consider records that at least have a prediction
-                if predicted is None and corrected is None:
-                    # No correction → assume hit even if prediction is missing
-                    total += 1
-                    hits += 1
-                    continue
-                total += 1
-                if corrected is None:
-                    hits += 1
-                else:
-                    hits += 1 if corrected == predicted else 0
-            if total == 0:
-                return None
-            return float(hits) / float(total)
-        except Exception:
-            return None
+        # try:
+        #     queryset = Result.objects.all()
+        #     total: int = 0
+        #     hits: int = 0
+        #     for r in queryset:
+        #         predicted = getattr(r, "predicted_count", None)
+        #         corrected = getattr(r, "corrected_count", None)
+        #         # Consider records that at least have a prediction
+        #         if predicted is None and corrected is None:
+        #             # No correction → assume hit even if prediction is missing
+        #             total += 1
+        #             hits += 1
+        #             continue
+        #         total += 1
+        #         if corrected is None:
+        #             hits += 1
+        #         else:
+        #             hits += 1 if corrected == predicted else 0
+        #     if total == 0:
+        #         return None
+        #     return float(hits) / float(total)
+        # except Exception:
+        #     return None
 
     def build(
         self,
