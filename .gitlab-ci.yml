@@ -11,9 +11,7 @@ test:
     - python --version
     - apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
     - pip install --upgrade pip setuptools wheel
-    - pip install -r ai_app/requirements.txt
-    # If there are additional deps for the sibling pipeline package, install them too
-    - if [ -f pipeline/requirements.txt ]; then pip install -r pipeline/requirements.txt; fi
+    - pip install -r requirements.txt
     - pip install coverage
   script:
     - export PYTHONPATH="$PYTHONPATH:$PWD"
