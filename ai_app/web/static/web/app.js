@@ -8,41 +8,8 @@
   const genMaxObjects = document.getElementById("genMaxObjects");
   // Selected type comes from a single textbox now
 
-  // Tag input for backgrounds
+  // Single background input (string)
   const genBackgroundInput = document.getElementById("genBackgroundInput");
-  const addBackgroundBtn = document.getElementById("addBackgroundBtn");
-  const genBackgroundsTags = document.getElementById("genBackgroundsTags");
-  let backgrounds = [];
-  function renderBackgrounds() {
-    genBackgroundsTags.innerHTML = backgrounds.map((bg, i) =>
-      `<span class="badge badge-secondary badge-lg flex items-center">${bg} <button type="button" class="ml-1 text-lg font-bold remove-bg" data-idx="${i}">&times;</button></span>`
-    ).join("");
-  }
-  function addBackground(val) {
-    val = val.trim();
-    if (val && !backgrounds.includes(val)) {
-      backgrounds.push(val);
-      renderBackgrounds();
-    }
-  }
-  genBackgroundInput?.addEventListener("keydown", e => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      addBackground(genBackgroundInput.value);
-      genBackgroundInput.value = "";
-    }
-  });
-  addBackgroundBtn?.addEventListener("click", () => {
-    addBackground(genBackgroundInput.value);
-    genBackgroundInput.value = "";
-  });
-  genBackgroundsTags?.addEventListener("click", e => {
-    if (e.target.classList.contains("remove-bg")) {
-      const idx = parseInt(e.target.dataset.idx, 10);
-      backgrounds.splice(idx, 1);
-      renderBackgrounds();
-    }
-  });
   const genBlur = document.getElementById("genBlur");
   const genRotate = document.getElementById("genRotate");
   const genNoise = document.getElementById("genNoise");
@@ -56,11 +23,11 @@
       const selectedTypeEl = document.getElementById("selectedType");
       const selectedType = (selectedTypeEl?.value || "").trim();
       const blur = genBlur.value;
-      let rotate = Array.from(genRotate.selectedOptions).map(o => parseInt(o.value, 10));
-      if (!rotate.length) rotate = [0];
+      let rotate = [parseInt(genRotate.value || "0", 10)];
       const noise = genNoise.value;
-      if (!numImages || !maxObjects || !selectedType || backgrounds.length === 0) {
-        generateStatus.textContent = "Please fill all fields, including at least one background.";
+      const backgroundVal = (genBackgroundInput?.value || "").trim();
+      if (!numImages || !maxObjects || !selectedType || !backgroundVal) {
+        generateStatus.textContent = "Please fill all fields (type, background, rotate, counts).";
         setTimeout(() => (generateStatus.textContent = ""), 2000);
         return;
       }
@@ -75,7 +42,7 @@
           num_images: parseInt(numImages, 10),
           max_objects_per_image: parseInt(maxObjects, 10),
           object_types: [selectedType],
-          backgrounds: backgrounds,
+          backgrounds: [backgroundVal],
           blur: parseFloat(blur),
           rotate: rotate,
           noise: parseFloat(noise)
