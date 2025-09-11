@@ -97,5 +97,3 @@ group-1/
 - Prometheus shows target down: verify Django is running and `/prometheus/metrics` is reachable.
 - Notebook GPU errors: set device to CPU if CUDA not available.
 
-## License
-Academic use for AI Engineering Lab exercises.
