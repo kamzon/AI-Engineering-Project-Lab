@@ -9,8 +9,7 @@ test:
     - python --version
     - apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
     - pip install --upgrade pip setuptools wheel
-    - pip install -r pipeline/requirements.txt
-    - pip install -r ai_app/requirements.txt
+    - pip install -r requirements.txt
     - pip install coverage
   script:
     - cd ai_app
