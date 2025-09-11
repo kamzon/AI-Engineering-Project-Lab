@@ -242,6 +242,7 @@ class GenerateView(APIView):
         input_serializer = GenerationRequestSerializer(data=request.data)
         if not input_serializer.is_valid():
             return Response(input_serializer.errors, status=400)
+        print("input_serializer is valid")
         v = input_serializer.validated_data
         num_images = v["num_images"]
         max_objects_per_image = v["max_objects_per_image"]
@@ -256,15 +257,25 @@ class GenerateView(APIView):
         # Save under MEDIA_ROOT/fewshot_dataset/<class>/image.png
         dataset_root = (settings.MEDIA_ROOT / "fewshot_dataset")
         dataset_root.mkdir(parents=True, exist_ok=True)
+        print("dataset_root is created")
         for _ in range(num_images):
             num_objects = random.randint(1, max_objects_per_image)
             chosen_types = random.choices(object_types, k=num_objects)
             background = random.choice(backgrounds)
             rotate = random.choice(rotate_choices)
             prompt = f"A {background} background with " + ", ".join(chosen_types)
+            print("prompt is created")
+            print(prompt)
             try:
+                print("generating image")
                 img = generate_image_with_api(prompt, api_key=API_KEY)
+                print("image generated")
+                print(img)
                 img = augment_image(img, blur=blur, rotate=rotate, noise=noise)
+                print("img is created")
+                print(img)
+                print("chosen_types is created")
+                print(chosen_types)
                 if img is None or not chosen_types:
                     results.append({"error": "Image generation failed or no objects."})
                     continue
@@ -272,16 +283,21 @@ class GenerateView(APIView):
                 labeled_class = chosen_types[0]
                 class_dir = dataset_root / labeled_class
                 class_dir.mkdir(parents=True, exist_ok=True)
+                print("class_dir is created")
                 filename = f"{labeled_class}_{random.randint(100000,999999)}.png"
                 img_path = class_dir / filename
                 img.save(img_path, format='PNG')
                 class_to_image_paths.setdefault(labeled_class, []).append(str(img_path))
+                print("class_to_image_paths is created")
+                print(class_to_image_paths)
                 results.append({
                     "saved": True,
                     "class": labeled_class,
                     "path": str(img_path)
                 })
             except Exception as e:
+                print("error is created")
+                print(e)
                 results.append({"error": str(e)})
         # After dataset is built, run few-shot fine-tuning and persist the model
         try:
@@ -292,9 +308,13 @@ class GenerateView(APIView):
                 batch_size=ModelConstants.FEW_SHOT_BATCH_SIZE,
                 freeze_backbone=ModelConstants.FEW_SHOT_FREEZE_BACKBONE,
             )
+            print("fewshot is created")
+            print(fewshot)
             fewshot.finetune(class_to_image_paths)
             finetuned_dir = ModelConstants.FINETUNED_MODEL_DIR
         except Exception as e:
+            print("error is created")
+            print(e)
             return Response({
                 "results": results,
                 "message": "Dataset created but fine-tuning failed.",

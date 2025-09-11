@@ -30,7 +30,7 @@ BACKGROUND_TYPES = ["random", "solid", "noise"]
 NUM_IMAGES = 10
 OBJECTS_PER_IMAGE = (1, 3)
 
-def generate_image_with_api(prompt, size="1024x1024", model="flux.1-schnell-gguf", api_key=None):
+def generate_image_with_api(prompt, size="512x512", model="flux.1-schnell-gguf", api_key=None):
     url = AI_ENDPOINT
     headers = {
         "Content-type": "application/json",

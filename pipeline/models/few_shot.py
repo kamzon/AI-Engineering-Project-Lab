@@ -20,6 +20,7 @@ class FewShotResNet:
         batch_size: int = 8,
         freeze_backbone: bool = True,
     ) -> None:
+        print("FewShotResNet is being created")
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         self.lr = lr
         self.weight_decay = weight_decay
@@ -29,6 +30,7 @@ class FewShotResNet:
 
         self._model: Optional[nn.Module] = None
         self._processor: Optional[AutoImageProcessor] = None
+        print("FewShotResNet is created")
 
     def _build_dataset(self, class_to_image_paths: Dict[str, List[str]]):
         samples: List[Tuple[str, int]] = []
@@ -75,6 +77,12 @@ class FewShotResNet:
             num_labels=num_classes,
             ignore_mismatched_sizes=True,
         ).to(self.device)
+        # Ensure classification loss is used (CrossEntropy) even when there's a single class
+        # or when the model incorrectly infers regression and applies MSELoss.
+        if num_classes == 1 or getattr(model.config, "problem_type", None) == "regression":
+            model.config.problem_type = "single_label_classification"
+        print("model is created")
+        print(model)
 
         model.config.label2id = {c: i for c, i in class_to_idx.items()}
         model.config.id2label = {i: c for c, i in class_to_idx.items()}
@@ -82,21 +90,38 @@ class FewShotResNet:
         self._freeze_backbone_except_head(model)
         params = [p for p in model.parameters() if p.requires_grad]
         optimizer = optim.Adam(params, lr=self.lr, weight_decay=self.weight_decay)
-
+        print("optimizer is created")
+        print(optimizer)
         model.train()
         for epoch in range(self.max_epochs):
             for i in range(0, len(samples), self.batch_size):
+                print("epoch is created")
+                print(epoch)
+                print("i is created")
+                print(i)
+                print("self.batch_size is created")
+                print(self.batch_size)
                 batch = samples[i : i + self.batch_size]
                 pixel_values, targets = self._collate(batch)
                 pixel_values = pixel_values.to(self.device)
                 targets = targets.to(self.device)
-
+                # Safety: if the model is still configured for regression, cast labels to float
+                if getattr(model.config, "problem_type", None) == "regression":
+                    targets = targets.float()
+                print("pixel_values is created")
+                print(pixel_values)
+                print("targets is created")
+                print(targets)
                 optimizer.zero_grad()
                 outputs = model(pixel_values=pixel_values, labels=targets)
+                print("outputs is created")
+                print(outputs)
                 loss = outputs.loss
                 loss.backward()
+                print("loss is created")
+                print(loss)
                 optimizer.step()
-
+                print("optimizer.step() is created")
         # Switch to eval and persist the model + processor
         self._model = model.eval()
 
