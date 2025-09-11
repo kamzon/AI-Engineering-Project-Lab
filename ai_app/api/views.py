@@ -199,7 +199,7 @@ class GenerateView(APIView):
         v = input_serializer.validated_data
         num_images = v["num_images"]
         num_objects_per_image = v["max_objects_per_image"]
-        object_types = list(v.get("selected_type", []))  # Ensure a fresh copy is used
+        object_types = list(v.get("object_types", []))  # Ensure a fresh copy is used
         backgrounds = list(v.get("backgrounds", []))  # Ensure a fresh copy is used
         blur = v.get("blur", 0)
         rotate_choices = v["rotate"]
@@ -264,7 +264,9 @@ class GenerateView(APIView):
             )
             print("fewshot is created")
             print(fewshot)
-            fewshot.finetune(class_to_image_paths)
+            # Fine-tune binary classifier: target vs others
+            target_label = object_types[0] if object_types else ""
+            fewshot.finetune_binary(target_label=target_label, label_to_image_paths=class_to_image_paths)
             finetuned_dir = ModelConstants.FINETUNED_MODEL_DIR
         except Exception as e:
             print("error is created")

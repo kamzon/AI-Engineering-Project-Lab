@@ -6,41 +6,7 @@
   const generateStatus = document.getElementById("generateStatus");
   const genNumImages = document.getElementById("genNumImages");
   const genMaxObjects = document.getElementById("genMaxObjects");
-  // Tag input for object types
-  const genObjectTypeInput = document.getElementById("genObjectTypeInput");
-  const addObjectTypeBtn = document.getElementById("addObjectTypeBtn");
-  const genObjectTypesTags = document.getElementById("genObjectTypesTags");
-  let objectTypes = [];
-  function renderObjectTypes() {
-    genObjectTypesTags.innerHTML = objectTypes.map((ot, i) =>
-      `<span class="badge badge-info badge-lg flex items-center">${ot} <button type="button" class="ml-1 text-lg font-bold remove-ot" data-idx="${i}">&times;</button></span>`
-    ).join("");
-  }
-  function addObjectType(val) {
-    val = val.trim();
-    if (val && !objectTypes.includes(val)) {
-      objectTypes.push(val);
-      renderObjectTypes();
-    }
-  }
-  genObjectTypeInput?.addEventListener("keydown", e => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      addObjectType(genObjectTypeInput.value);
-      genObjectTypeInput.value = "";
-    }
-  });
-  addObjectTypeBtn?.addEventListener("click", () => {
-    addObjectType(genObjectTypeInput.value);
-    genObjectTypeInput.value = "";
-  });
-  genObjectTypesTags?.addEventListener("click", e => {
-    if (e.target.classList.contains("remove-ot")) {
-      const idx = parseInt(e.target.dataset.idx, 10);
-      objectTypes.splice(idx, 1);
-      renderObjectTypes();
-    }
-  });
+  // Selected type comes from a single textbox now
 
   // Tag input for backgrounds
   const genBackgroundInput = document.getElementById("genBackgroundInput");
@@ -87,11 +53,17 @@
       const numImages = genNumImages.value;
       const maxObjects = genMaxObjects.value;
       const resultsList = document.getElementById("resultsList");
-  if (!objectTypes.length || !backgrounds.length) return;
+      const selectedTypeEl = document.getElementById("selectedType");
+      const selectedType = (selectedTypeEl?.value || "").trim();
       const blur = genBlur.value;
-      const rotate = Array.from(genRotate.selectedOptions).map(o => parseInt(o.value, 10));
+      let rotate = Array.from(genRotate.selectedOptions).map(o => parseInt(o.value, 10));
+      if (!rotate.length) rotate = [0];
       const noise = genNoise.value;
-      if (!numImages || !maxObjects || !objectTypes.length || !backgrounds.length || !rotate.length) return;
+      if (!numImages || !maxObjects || !selectedType || backgrounds.length === 0) {
+        generateStatus.textContent = "Please fill all fields, including at least one background.";
+        setTimeout(() => (generateStatus.textContent = ""), 2000);
+        return;
+      }
       const csrf = getCSRF();
       generateBtn.disabled = true;
       if (generateBtnLabel && generateBtnSpinner) {
@@ -99,25 +71,33 @@
         generateBtnSpinner.classList.remove("hidden");
       }
       try {
+        const payload = {
+          num_images: parseInt(numImages, 10),
+          max_objects_per_image: parseInt(maxObjects, 10),
+          object_types: [selectedType],
+          backgrounds: backgrounds,
+          blur: parseFloat(blur),
+          rotate: rotate,
+          noise: parseFloat(noise)
+        };
         const resp = await fetch("/api/generate/", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             "X-CSRFToken": csrf
           },
-          body: JSON.stringify({
-            num_images: parseInt(numImages, 10),
-            max_objects_per_image: parseInt(maxObjects, 10),
-            object_types: objectTypes,
-            backgrounds: backgrounds,
-            blur: parseFloat(blur),
-            rotate: rotate,
-            noise: parseFloat(noise)
-          })
+          body: JSON.stringify(payload)
         });
-        const data = await resp.json();
+        const text = await resp.text();
+        let data = null;
+        try {
+          data = text ? JSON.parse(text) : null;
+        } catch (e) {
+          // non-JSON response
+        }
         if (!resp.ok) {
-          generateStatus.textContent = `Error: ${data.error || JSON.stringify(data)}`;
+          const msg = (data && (data.error || data.detail)) ? (data.error || data.detail) : (text || resp.statusText);
+          generateStatus.textContent = `Error: ${msg}`;
         } else {
           generateStatus.textContent = "Images generated and uploaded.";
           // Show all results
@@ -137,7 +117,7 @@
           generateBtnSpinner.classList.add("hidden");
         }
         setTimeout(() => (generateStatus.textContent = ""), 2000);
-        generateForm.reset();
+        // Keep form values so the user can adjust parameters; do not auto-reset
       }
     });
   }
