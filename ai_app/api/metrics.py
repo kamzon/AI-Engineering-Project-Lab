@@ -69,6 +69,11 @@ OVERALL_RESPONSE_MS = Gauge(
     "pipeline_overall_response_ms", "Overall pipeline response time (ms) per run"
 )
 
+# Accuracy gauge (last computed accuracy across DB)
+ACCURACY = Gauge(
+    "pipeline_accuracy", "Overall accuracy across records based on corrections"
+)
+
 
 def _safe_int(value: Optional[Any]) -> Optional[int]:
     try:
@@ -170,6 +175,14 @@ def record_pipeline_metrics(metadata: Dict[str, Any], label_counts: Dict[str, in
         overall_ms = metadata.get("overall_response_ms")
         if overall_ms is not None:
             OVERALL_RESPONSE_MS.set(float(overall_ms))
+    except Exception:
+        pass
+
+    # Accuracy
+    try:
+        acc = metadata.get("accuracy")
+        if acc is not None:
+            ACCURACY.set(float(acc))
     except Exception:
         pass
 

@@ -187,9 +187,25 @@
       ]
     },
     {
+      "type": "gauge",
+      "title": "Accuracy",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 118 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "targets": [
+        { "expr": "pipeline_accuracy", "instant": true }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "showThresholdLabels": true,
+        "showThresholdMarkers": true,
+        "min": 0,
+        "max": 1
+      }
+    },
+    {
       "type": "timeseries",
       "title": "Overall Response Time (ms)",
-      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 110 },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 126 },
       "datasource": { "type": "prometheus", "uid": "Prometheus" },
       "targets": [
         { "expr": "pipeline_overall_response_ms", "legendFormat": "overall" }
