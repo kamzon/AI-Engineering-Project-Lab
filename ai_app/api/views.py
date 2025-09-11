@@ -163,54 +163,7 @@ class CorrectionView(APIView):
         return Response(ResultSerializer(result).data, status=200)
 
 
-class GenerateView(APIView):
-    """Generate an image with specified objects using an external API."""
 
-    @extend_schema(
-        summary="Generate image with specified objects",
-        description=(
-            "Generates an image containing specified objects using an external image "
-            "generation API. Returns the created Result with a link to the generated image."
-        ),
-        request=CorrectionRequestSerializer,  
-        responses={
-            201: ResultSerializer,
-            400: OpenApiResponse(description="Missing or invalid parameters"),
-            500: OpenApiResponse(description="Image generation error"),
-        },
-        tags=["Generation"],
-        examples=[
-            OpenApiExample(
-                "Image generation example",
-                description="Request to generate an image with specified objects.",
-                value={"object_type": "cat", "num_objects": 3},
-                request_only=True,
-            ),
-        ],
-    )
-    def post(self, request):
-        input_serializer = CorrectionRequestSerializer(data=request.data)
-        if not input_serializer.is_valid():
-            return Response(input_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-        validated = input_serializer.validated_data
-        object_type = validated["object_type"]
-        num_objects = validated.get("num_objects", 1)
-
-        generated_image_path = f"generated_images/{object_type}_{num_objects}.png"
-        os.makedirs(os.path.dirname(generated_image_path), exist_ok=True)
-        with open(generated_image_path, 'wb') as f:
-            f.write(os.urandom(1024))  
-
-        result = Result.objects.create(
-            image=generated_image_path,
-            object_type=object_type,
-            predicted_count=num_objects,
-            status="generated",
-            meta={"generation_method": "external_api"}
-        )
-
-        return Response(ResultSerializer(result).data, status=status.HTTP_201_CREATED)
     
 class GenerateView(APIView):
     """Generate images, then fine-tune the ResNet classifier using few-shot on them."""
@@ -263,7 +216,7 @@ class GenerateView(APIView):
             chosen_types = random.choices(object_types, k=num_objects)
             background = random.choice(backgrounds)
             rotate = random.choice(rotate_choices)
-            prompt = f"A {background} background with " + ", ".join(chosen_types)
+            prompt = f"A {background} background with {num_objects} " + ", ".join(chosen_types)
             print("prompt is created")
             print(prompt)
             try:
