@@ -10,3 +10,4 @@
 | improve the accuracy of the few shot model                                        | Noureddine          |               | In progress |
 | Update API Documentation                                                          | Noureddine          |               | Completed   |
 | Update Readme                                                                     | Noureddine          |               | Completed   |
+| Update Unit tests & pipline                                                                   | Noureddine          |               | Completed   |
