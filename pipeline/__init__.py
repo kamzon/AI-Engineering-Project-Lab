@@ -1,4 +1,4 @@
-from .model import Pipeline, ModelConstants
+from .pipeline import Pipeline, ModelConstants
 
 __all__ = ["Pipeline", "ModelConstants"]
 

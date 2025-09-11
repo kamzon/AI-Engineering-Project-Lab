@@ -38,7 +38,7 @@ Python 3.12.8
 
 ```sh
 git clone git@git.fim.uni-passau.de:aie/ai-engineering-lab/student-projects/group-1.git
-cd gourp-1/ai_app
+cd gourp-1
 ```
 
 ### 2. Create and activate a virtual environment
@@ -52,20 +52,19 @@ source env/bin/activate
 
 ```sh
 pip install -r requirements.txt
-pip install -r ../pipeline/requirements.txt
 ```
 
 ### 4. Apply migrations
 
 ```sh
-python manage.py makemigrations
-python manage.py migrate
+python ai_app/manage.py makemigrations
+python ai_app/manage.py migrate
 ```
 
 ### 5. Run the development server
 
 ```sh
-python manage.py runserver
+python ai_app/manage.py runserver
 ```
 
 The server will start at `http://127.0.0.1:8000/`.
@@ -75,7 +74,7 @@ The server will start at `http://127.0.0.1:8000/`.
 To run unit tests for the project:
 
 ```sh
-python manage.py test
+python ai_app/manage.py test
 ```
 
 ## API Endpoints

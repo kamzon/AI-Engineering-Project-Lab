@@ -16,12 +16,12 @@
           <span class="label-text">Theme</span>
         </label>
         <select id="themeSelect" class="select select-bordered select-sm">
-          <option value="winter" {% if current_theme=='winter' %}selected{% endif %}>winter</option>
-          <option value="dracula" {% if current_theme=='dracula' %}selected{% endif %}>dracula</option>
-          <option value="forest" {% if current_theme=='forest' %}selected{% endif %}>forest</option>
-          <option value="dim" {% if current_theme=='dim' %}selected{% endif %}>dim</option>
-          <option value="night" {% if current_theme=='night' %}selected{% endif %}>night</option>
-          <option value="halloween" {% if current_theme=='halloween' %}selected{% endif %}>halloween</option>
+          <option value="winter" {% if current_theme|default:'winter' == 'winter' %}selected{% endif %}>winter</option>
+          <option value="dracula" {% if current_theme|default:'winter' == 'dracula' %}selected{% endif %}>dracula</option>
+          <option value="forest" {% if current_theme|default:'winter' == 'forest' %}selected{% endif %}>forest</option>
+          <option value="dim" {% if current_theme|default:'winter' == 'dim' %}selected{% endif %}>dim</option>
+          <option value="night" {% if current_theme|default:'winter' == 'night' %}selected{% endif %}>night</option>
+          <option value="halloween" {% if current_theme|default:'winter' == 'halloween' %}selected{% endif %}>halloween</option>
         </select>
       </div>
     </div>

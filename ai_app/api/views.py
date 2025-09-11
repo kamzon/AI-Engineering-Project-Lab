@@ -14,7 +14,7 @@ from .serializers import (
     CountRequestSerializer,
     CorrectionRequestSerializer,
 )
-from pipeline.model import Pipeline
+from pipeline.pipeline import Pipeline
 from .metrics import record_pipeline_metrics
 import sys
 import random
