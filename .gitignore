@@ -4,7 +4,7 @@ ai_app/pipeline/finetuned
 ai_apppipeline/outputs/
 pipeline/outputs
 pipeline/finetuned
-
+checkpoints_resnet50/checkpoint-3
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
