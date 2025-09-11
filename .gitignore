@@ -2,6 +2,8 @@
 sam_vit_b_01ec64.pth
 ai_app/pipeline/finetuned
 ai_apppipeline/outputs/
+pipeline/outputs
+pipeline/finetuned
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

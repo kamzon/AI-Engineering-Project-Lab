@@ -5,9 +5,32 @@ from django.http import JsonResponse, HttpResponseBadRequest
 from django.views.decorators.http import require_POST
 from django.middleware.csrf import get_token
 from .models import ThemePreference
+import os
+import json
+from pipeline.config import ModelConstants
+
+def _get_finetuned_object_types():
+    try:
+        finetuned_dir = ModelConstants.FINETUNED_MODEL_DIR
+        if os.path.isdir(finetuned_dir) and os.listdir(finetuned_dir):
+            config_path = os.path.join(finetuned_dir, "config.json")
+            if os.path.exists(config_path):
+                with open(config_path, "r") as f:
+                    cfg = json.load(f)
+                id2label = cfg.get("id2label")
+                if isinstance(id2label, dict) and id2label:
+                    # Sort by numeric id to keep stable ordering
+                    ordered = [label for _, label in sorted(id2label.items(), key=lambda kv: int(kv[0]))]
+                    return ordered 
+    except Exception:
+        pass
+    return None
+
 
 def index(request):
-    object_types = getattr(settings, "OBJECT_TYPES", [])
+    default_object_types = getattr(settings, "OBJECT_TYPES", [])
+    finetuned_types = _get_finetuned_object_types()
+    object_types = finetuned_types or default_object_types
     background_types = ["random", "solid", "noise"]
     latest = Result.objects.order_by("-created_at").first()
     pref = ThemePreference.objects.first()
