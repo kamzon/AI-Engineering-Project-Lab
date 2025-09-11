@@ -1,7 +1,7 @@
 /venv
 sam_vit_b_01ec64.pth
-pipeline/finetuned
-pipeline/outputs/
+ai_app/pipeline/finetuned
+ai_apppipeline/outputs/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -68,3 +68,5 @@ coverage.xml
 
 # Misc
 *.swp
+
+
