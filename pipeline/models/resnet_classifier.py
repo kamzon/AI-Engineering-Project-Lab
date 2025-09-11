@@ -13,6 +13,7 @@ class ResNetImageClassifier:
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         self._image_processor: Optional[AutoImageProcessor] = None
         self._class_model: Optional[AutoModelForImageClassification] = None
+        self._load_source: Optional[str] = None
 
     def _init(self) -> None:
         if self._image_processor is None or self._class_model is None:
@@ -22,16 +23,31 @@ class ResNetImageClassifier:
                 finetuned_dir if os.path.isdir(finetuned_dir) and os.listdir(finetuned_dir)
                 else ModelConstants.IMAGE_MODEL_ID
             )
+            self._load_source = load_source
             print(f"Loading classifier from {load_source}") 
+            if load_source == finetuned_dir:
+                try:
+                    print(f"Fine-tuned directory contents: {os.listdir(finetuned_dir)}")
+                except Exception as e:
+                    print(f"Unable to list fine-tuned directory '{finetuned_dir}': {e}")
             self._image_processor = AutoImageProcessor.from_pretrained(load_source)
             self._class_model = AutoModelForImageClassification.from_pretrained(
                 load_source
             ).to(self.device)
+            try:
+                id2label = getattr(self._class_model.config, "id2label", {})
+                problem_type = getattr(self._class_model.config, "problem_type", None)
+                print(f"Classifier config id2label: {id2label}")
+                print(f"Classifier config problem_type: {problem_type}")
+            except Exception:
+                pass
 
     def classify(self, segments: List[torch.Tensor]) -> Tuple[List[str], List[float]]:
         self._init()
         assert self._image_processor is not None
         assert self._class_model is not None
+        if self._load_source is not None:
+            print(f"Running classification using model from {self._load_source}")
 
         predicted_classes: List[str] = []
         classifier_confidences: List[float] = []
