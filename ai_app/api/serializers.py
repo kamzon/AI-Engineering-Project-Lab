@@ -64,9 +64,10 @@ class GenerationRequestSerializer(serializers.Serializer):
         child=serializers.CharField(),
         min_length=1
     )
-    blur = serializers.FloatField(min_value=0, default=0)
+    # Accept 0–100 as percentages
+    blur = serializers.IntegerField(min_value=0, max_value=100, default=0)
     rotate = serializers.ListField(
-        child=serializers.IntegerField(),
+        child=serializers.IntegerField(min_value=0, max_value=360),
         min_length=1
     )
-    noise = serializers.FloatField(min_value=0, default=0)
+    noise = serializers.IntegerField(min_value=0, max_value=100, default=0)

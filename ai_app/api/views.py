@@ -201,9 +201,10 @@ class GenerateView(APIView):
         num_objects_per_image = v["max_objects_per_image"]
         object_types = list(v.get("object_types", []))  # Ensure a fresh copy is used
         backgrounds = list(v.get("backgrounds", []))  # Ensure a fresh copy is used
-        blur = v.get("blur", 0)
+        # Frontend sends blur/noise as 0–100; map to augmentation-friendly values
+        blur_pct = int(v.get("blur", 0))
         rotate_choices = v["rotate"]
-        noise = v["noise"]
+        noise_pct = int(v["noise"]) if v.get("noise") is not None else 0
         results = []
         # Build dataset mapping: class_name -> [image_path, ...]
         class_to_image_paths = {}
@@ -225,7 +226,11 @@ class GenerateView(APIView):
                 img = generate_image_with_api(prompt, api_key=API_KEY)
                 print("image generated")
                 #print(img)
-                img = augment_image(img, blur=blur, rotate=rotate, noise=noise)
+                # Map blur% to GaussianBlur radius (0–100 -> 0–10)
+                blur_radius = round((max(0, min(100, blur_pct)) / 100.0) * 10.0, 2)
+                # Map noise% to std dev in [0, 50]
+                noise_std = round((max(0, min(100, noise_pct)) / 100.0) * 50.0, 2)
+                img = augment_image(img, blur=blur_radius, rotate=rotate, noise=noise_std)
                 print("img is created")
                 print(img)
                 print("object_types is created")

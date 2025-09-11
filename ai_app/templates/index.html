@@ -70,9 +70,9 @@
           <div class="form-control">
             <label class="label">
               <span class="label-text">Blur</span>
-              <span class="label-text-alt text-base-content/60">0 = none</span>
+              <span class="label-text-alt text-base-content/60">0–100</span>
             </label>
-            <input class="input input-bordered w-full" type="number" step="0.1" name="blur" id="genBlur" min="0" value="0" required />
+            <input class="input input-bordered w-full" type="number" step="1" name="blur" id="genBlur" min="0" max="100" value="0" required />
           </div>
           <div class="form-control">
             <label class="label">
@@ -84,9 +84,9 @@
           <div class="form-control">
             <label class="label">
               <span class="label-text">Noise</span>
-              <span class="label-text-alt text-base-content/60">0 = none</span>
+              <span class="label-text-alt text-base-content/60">0–100</span>
             </label>
-            <input class="input input-bordered w-full" type="number" step="0.1" name="noise" id="genNoise" min="0" value="0" required />
+            <input class="input input-bordered w-full" type="number" step="1" name="noise" id="genNoise" min="0" max="100" value="0" required />
           </div>
         </div>
         <div class="flex gap-2 justify-end mt-6 items-center">
