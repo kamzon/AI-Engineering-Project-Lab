@@ -54,7 +54,7 @@ class ResNetImageClassifier:
 
         self._class_model.eval()
         with torch.no_grad():
-            for segment in segments:
+            for idx, segment in enumerate(segments):
                 img_hwc = (
                     segment.permute(1, 2, 0).cpu().numpy().astype(np.uint8)
                 )
@@ -69,8 +69,10 @@ class ResNetImageClassifier:
                     probs = torch.softmax(logits, dim=-1)
                     conf = float(probs.max(dim=-1).values.item())
                     classifier_confidences.append(conf)
+                    print(f"[ResNet] Segment {idx}: confidence={conf:.4f}, class='{predicted_class}'")
                 except Exception:
                     classifier_confidences.append(float("nan"))
+                    print(f"[ResNet] Segment {idx}: confidence=nan, class='{predicted_class}'")
 
         return predicted_classes, classifier_confidences
 
