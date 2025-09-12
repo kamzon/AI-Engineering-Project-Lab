@@ -14,6 +14,8 @@ from transformers import (
     DefaultDataCollator,
 )
 
+from pipeline.config import ModelConstants
+
 class FewShotResNet:
     """
     A class to fine-tune a ResNet model for a binary classification task
@@ -23,7 +25,7 @@ class FewShotResNet:
         self,
         object_type: str,
         model_checkpoint: str = "microsoft/resnet-50",
-        final_model_path: str = "pipeline/finetuned",
+        final_model_path: str = ModelConstants.FINETUNED_MODEL_DIR,
     ):
         """
         Initializes the fine-tuning pipeline.
@@ -41,7 +43,8 @@ class FewShotResNet:
         self.labels = ["others", self.object_type] # Class 0 is 'others', Class 1 is the target
         self.model_checkpoint = model_checkpoint
         self.final_model_path = final_model_path
-        self.output_dir = "./checkpoints_resnet50"
+        # Keep trainer checkpoints inside the finetuned dir
+        self.output_dir = os.path.join(self.final_model_path, "checkpoints_resnet50")
 
         # Initialize attributes
         self.image_processor = None
@@ -95,6 +98,11 @@ class FewShotResNet:
             label2id=self.label2id,
             ignore_mismatched_sizes=True,
         )
+        # Ensure single-label classification behavior
+        try:
+            self.model.config.problem_type = "single_label_classification"
+        except Exception:
+            pass
 
     def _transform_data(self, example_batch):
         """Applies the image processor to a batch of examples."""
@@ -162,7 +170,13 @@ class FewShotResNet:
         except Exception:
             logits, labels = eval_pred
         predictions = np.argmax(logits, axis=-1)
-        return {"accuracy": accuracy_score(labels, predictions)}
+        acc = accuracy_score(labels, predictions)
+        # Debug: show label mapping to catch label inversion issues
+        try:
+            print({"id2label": getattr(getattr(eval_pred, 'model', None), 'config', None).id2label})
+        except Exception:
+            pass
+        return {"accuracy": acc}
 
     def finetune(self, num_train_epochs: int = 3, per_device_batch_size: int = 8):
         """
@@ -223,6 +237,14 @@ class FewShotResNet:
         print(f"✅ Training complete. Saving the best model to {self.final_model_path}")
         os.makedirs(self.final_model_path, exist_ok=True)
         trainer.save_model(self.final_model_path)
+        # Persist mapping explicitly
+        try:
+            if hasattr(self.model, 'config'):
+                self.model.config.id2label = self.id2label
+                self.model.config.label2id = self.label2id
+                self.model.config.save_pretrained(self.final_model_path)
+        except Exception:
+            pass
         try:
             # Persist the image processor so inference can load it from the same directory
             if self.image_processor is not None:

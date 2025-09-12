@@ -51,12 +51,76 @@ class SamMaskUtils:
         return masks_sorted
 
     @staticmethod
-    def build_panoptic_map(masks_sorted: List[Dict[str, Any]], image_size: Tuple[int, int], top_n: int) -> torch.Tensor:
+    def build_panoptic_map(
+        masks_sorted: List[Dict[str, Any]],
+        image_size: Tuple[int, int],
+        top_n: int,
+        coverage_ratio: float = 0.0,
+        min_rel_area: float = 0.0,
+    ) -> torch.Tensor:
         width, height = image_size
         panoptic_map_np = np.zeros((height, width), dtype=np.int32)
-        for idx, mask_data in enumerate(masks_sorted[: top_n]):
-            panoptic_map_np[mask_data["segmentation"]] = idx + 1
+        total_pixels = float(width * height)
+
+        largest_area = masks_sorted[0]["area"] if masks_sorted else 0
+        added = 0
+        for idx, mask_data in enumerate(masks_sorted):
+            if added >= top_n:
+                break
+            # Filter very small segments relative to the main one
+            if min_rel_area > 0.0 and largest_area > 0:
+                if mask_data["area"] < (min_rel_area * largest_area):
+                    continue
+            # Add this mask
+            panoptic_map_np[mask_data["segmentation"]] = added + 1
+            added += 1
+            if coverage_ratio > 0.0:
+                covered = float((panoptic_map_np != 0).sum()) / total_pixels
+                if covered >= coverage_ratio:
+                    break
         panoptic_map = torch.from_numpy(panoptic_map_np)
+        return panoptic_map
+
+    @staticmethod
+    def merge_small_adjacent_segments(panoptic_map: torch.Tensor, min_ratio: float = 0.05) -> torch.Tensor:
+        """
+        Merge small segments into the largest segment if they touch it.
+
+        - min_ratio: segments with area < min_ratio * area(largest) are eligible to merge.
+        """
+        labels = [int(l) for l in panoptic_map.unique().tolist() if int(l) != 0]
+        if not labels:
+            return panoptic_map
+        areas = {label: int((panoptic_map == label).sum().item()) for label in labels}
+        main_label = max(labels, key=lambda l: areas[l])
+        main_mask = panoptic_map == main_label
+        main_area = areas[main_label]
+        threshold = max(1, int(main_area * float(min_ratio)))
+
+        # 4-neighborhood adjacency check
+        h, w = panoptic_map.shape
+        for label in labels:
+            if label == main_label:
+                continue
+            if areas[label] >= threshold:
+                continue
+            mask = (panoptic_map == label)
+            # Detect if any pixel of mask touches main_mask via 4-neighborhood
+            touch = False
+            ys, xs = torch.nonzero(mask, as_tuple=True)
+            for y, x in zip(ys.tolist(), xs.tolist()):
+                if (
+                    (y > 0 and main_mask[y - 1, x]) or
+                    (y + 1 < h and main_mask[y + 1, x]) or
+                    (x > 0 and main_mask[y, x - 1]) or
+                    (x + 1 < w and main_mask[y, x + 1])
+                ):
+                    touch = True
+                    break
+            if touch:
+                panoptic_map[mask] = main_label
+                main_mask = panoptic_map == main_label
+                main_area += areas[label]
         return panoptic_map
 
     @staticmethod

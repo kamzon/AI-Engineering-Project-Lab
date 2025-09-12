@@ -126,8 +126,20 @@ class Pipeline:
         mask_generator = sam_utils.init_generator()
         masks_sorted = SamMaskUtils.generate_sorted_masks(
             self._load_image(), mask_generator)
+        # Build panoptic with adaptive controls:
+        # - keep at most top_n segments
+        # - stop early if coverage reaches 80%
+        # - drop segments smaller than 2% of the largest one
         self._panoptic_map = SamMaskUtils.build_panoptic_map(
-            masks_sorted, self._load_image().size, self.top_n
+            masks_sorted,
+            self._load_image().size,
+            self.top_n,
+            coverage_ratio=0.8,
+            min_rel_area=0.02,
+        )
+        # Merge small adjacent segments into the main object to reduce over-segmentation
+        self._panoptic_map = SamMaskUtils.merge_small_adjacent_segments(
+            self._panoptic_map, min_ratio=0.05
         )
         img_tensor = self._to_image_tensor()
         self._segments = SamMaskUtils.crop_segments(
