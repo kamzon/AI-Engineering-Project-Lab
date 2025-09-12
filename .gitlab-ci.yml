@@ -5,9 +5,6 @@ test:
   image: python:3.12-slim
   stage: test
   coverage: '/^TOTAL.*?(\d+(?:\.\d+)?)%$/'
-  variables:
-    DJANGO_SETTINGS_MODULE: ai_app.config.settings   
-    PYTHONPATH: "$PYTHONPATH:$CI_PROJECT_DIR"
   before_script:
     - python --version
     - apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
