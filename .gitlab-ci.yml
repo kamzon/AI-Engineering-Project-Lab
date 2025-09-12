@@ -6,7 +6,7 @@ test:
   stage: test
   coverage: '/^TOTAL.*?(\d+(?:\.\d+)?)%$/'
   variables:
-    DJANGO_SETTINGS_MODULE: ai_app.settings   
+    DJANGO_SETTINGS_MODULE: ai_app.config.settings   
     PYTHONPATH: "$PYTHONPATH:$CI_PROJECT_DIR"
   before_script:
     - python --version
