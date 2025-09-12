@@ -74,6 +74,14 @@ ACCURACY = Gauge(
     "pipeline_accuracy", "Overall accuracy across records based on corrections"
 )
 
+# Precision/Recall gauges
+PRECISION = Gauge(
+    "pipeline_precision", "Overall precision across records based on corrections"
+)
+RECALL = Gauge(
+    "pipeline_recall", "Overall recall across records based on corrections"
+)
+
 
 def _safe_int(value: Optional[Any]) -> Optional[int]:
     try:
@@ -85,6 +93,25 @@ def _safe_int(value: Optional[Any]) -> Optional[int]:
 def record_pipeline_metrics(metadata: Dict[str, Any], label_counts: Dict[str, int]) -> None:
     """Record pipeline metrics to Prometheus from metadata and label counts."""
     PIPELINE_RUNS_TOTAL.inc()
+    
+    try:
+        acc = metadata.get("accuracy")
+        if acc is not None:
+            ACCURACY.set(float(acc))
+    except Exception:
+        pass
+    try:
+        prec = metadata.get("precision")
+        if prec is not None:
+            PRECISION.set(float(prec))
+    except Exception:
+        pass
+    try:
+        rec = metadata.get("recall")
+        if rec is not None:
+            RECALL.set(float(rec))
+    except Exception:
+        pass
 
     image_res = metadata.get("image_resolution", {}) or {}
     width = _safe_int(image_res.get("width"))
@@ -178,12 +205,5 @@ def record_pipeline_metrics(metadata: Dict[str, Any], label_counts: Dict[str, in
     except Exception:
         pass
 
-    # Accuracy
-    try:
-        acc = metadata.get("accuracy")
-        if acc is not None:
-            ACCURACY.set(float(acc))
-    except Exception:
-        pass
 
 

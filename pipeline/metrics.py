@@ -2,50 +2,75 @@ from typing import Any, Dict, List, Optional
 
 class MetricsCollector:
 
-    def _compute_accuracy(self) -> Optional[float]:
+    def _compute_classification_metrics(self) -> Dict[str, Optional[float]]:
         """
-        Accuracy over all DB records:
+        Compute dataset-level accuracy, precision, and recall from DB records.
+
+        Accuracy rule:
         - If corrected_count is present and != predicted_count → miss
         - If corrected_count is present and == predicted_count → hit
         - If corrected_count is None → assume hit
-        Returns None if DB/model import is unavailable.
+
+        Precision/Recall count-level approximation (only on records with corrections):
+        - TP += min(predicted_count, corrected_count)
+        - FP += max(predicted_count - corrected_count, 0)
+        - FN += max(corrected_count - predicted_count, 0)
         """
         # Avoid touching Django models before apps are ready (e.g., during checks/tests)
         try:
             from django.apps import apps as django_apps  # type: ignore  # pylint: disable=import-outside-toplevel
             if not getattr(django_apps, "ready", False):
-                return None
+                return {"accuracy": None, "precision": None, "recall": None}
         except Exception:
-            return None
+            return {"accuracy": None, "precision": None, "recall": None}
         try:
             from records.models import Result  # type: ignore  # pylint: disable=import-outside-toplevel
         except Exception:
             print("Error importing Result model")
-            return None
+            return {"accuracy": None, "precision": None, "recall": None}
 
         try:
             queryset = Result.objects.all()
             total: int = 0
             hits: int = 0
+
+            tp: int = 0
+            fp: int = 0
+            fn: int = 0
+
             for r in queryset:
-                predicted = getattr(r, "predicted_count", None)
-                corrected = getattr(r, "corrected_count", None)
-                # Consider records that at least have a prediction
-                if predicted is None and corrected is None:
-                    # No correction → assume hit even if prediction is missing
-                    total += 1
-                    hits += 1
-                    continue
+                predicted_raw = getattr(r, "predicted_count", None)
+                corrected_raw = getattr(r, "corrected_count", None)
+
+                predicted = int(predicted_raw) if predicted_raw is not None else 0
+                corrected = int(corrected_raw) if corrected_raw is not None else None
+
+                # Accuracy tally (assume hit if no correction)
                 total += 1
                 if corrected is None:
                     hits += 1
                 else:
-                    hits += 1 if corrected == predicted else 0
-            if total == 0:
-                return None
-            return float(hits) / float(total)
+                    hits += 1 if predicted == corrected else 0
+
+                # Precision/Recall only when corrected is available
+                if corrected is not None:
+                    tp += min(predicted, corrected)
+                    if predicted > corrected:
+                        fp += (predicted - corrected)
+                    elif corrected > predicted:
+                        fn += (corrected - predicted)
+
+            accuracy: Optional[float] = None if total == 0 else float(hits) / float(total)
+            precision: Optional[float] = None
+            recall: Optional[float] = None
+            if (tp + fp) > 0:
+                precision = float(tp) / float(tp + fp)
+            if (tp + fn) > 0:
+                recall = float(tp) / float(tp + fn)
+
+            return {"accuracy": accuracy, "precision": precision, "recall": recall}
         except Exception:
-            return None
+            return {"accuracy": None, "precision": None, "recall": None}
 
     def build(
         self,
@@ -121,6 +146,8 @@ class MetricsCollector:
 
         timings_ms = timings_ms or {}
 
+        pr_metrics = self._compute_classification_metrics()
+
         return {
             "image_resolution": {
                 "width": width,
@@ -134,7 +161,9 @@ class MetricsCollector:
             "models_used": models_used or {},
             "classifier_confidences": classifier_confidences or [],
             "classifier_min_confidence": min_classifier_conf,
-            "accuracy": self._compute_accuracy(),
+            "accuracy": pr_metrics.get("accuracy"),
+            "precision": pr_metrics.get("precision"),
+            "recall": pr_metrics.get("recall"),
             "inference_time_ms_per_model": {
                 k: float(v) for k, v in timings_ms.items()
             },
