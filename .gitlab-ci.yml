@@ -14,7 +14,7 @@ test:
     - pip install --upgrade pip setuptools wheel
     - pip install -r requirements.txt
     - pip install coverage
-    - python ai_app/manage.py migrate --noinput   
+    - cd ai_app && python manage.py migrate --noinput   
   script:
     - coverage run --source='ai_app' ai_app/manage.py test
     - coverage xml -o ai_app/coverage.xml
