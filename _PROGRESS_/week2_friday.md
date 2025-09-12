@@ -1,3 +1,6 @@
-| **Task** | **Responsible** | **Resources** | **Status** |
-| -------- | --------------- | ------------- | ---------- |
-| Presentation & demo                                                      | Noureddine & Haidar          |               | Completed   |
+| **Task**                                                                                                                                                                                                                      | **Responsible**     | **Resources** | **Status**  |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- | ------------- | ----------- |
+| Presentation & demo                                                                                                                                                                                                           | Haidar & Noureddine |               | Completed   |
+| update segmentation process to introduce small segment joining/grouping under certain conditions which led to big improvement in correct object segment detection                                                             | Haidar Chaito       |               | Completed   |
+| update the few shot finetune process and introduce true/false labels, by generating true labels based on the user prompt and false labels based on anything not in the user prompts to finetune the model based on both cases | Haidar Chaito       |               | Completed   |
+| debug and fix the ci/cd pipeline                                                                                                                                                                                              | Haidar Chaito       |               | In progress |
