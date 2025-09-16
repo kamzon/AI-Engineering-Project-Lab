@@ -10,6 +10,7 @@ from PIL import Image
 from pipeline.metrics import MetricsCollector
 from pipeline.config import ModelConstants
 from pipeline.models.resnet_classifier import ResNetImageClassifier
+from pipeline.models.safety import load_safety_model
 from pipeline.models.zero_shot import ZeroShotLabeler
 from pipeline.utils.masks import SamMaskUtils
 from pipeline.utils.visualization import PanopticVisualizer
@@ -47,7 +48,9 @@ class Pipeline:
         self._predicted_classes: Optional[List[str]] = None
         self._zero_shot_labels: Optional[List[str]] = None
         self._classifier_confidences: Optional[List[float]] = None
-
+        self.image_path = image_path
+        self.safety_model = load_safety_model(
+            ModelConstants.SAFETY_MODEL_PATH, self.device)  
 
     def _load_image(self) -> Image.Image:
         if self._image is None:
@@ -215,8 +218,35 @@ class Pipeline:
             },
         )
         return metadata
+    
+    def _safety_check(self) -> bool:
+        print("Running safety filter...")
+        transform = tf.Compose([
+            tf.Resize((224, 224)),
+            tf.ToTensor()
+        ])
+        image = transform(self._load_image()).unsqueeze(0).to(self.device)
+
+        with torch.no_grad():
+            logits = self.safety_model(image)
+            probs = torch.softmax(logits, dim=1)
+            pred = probs.argmax(dim=1).item()
+            confidence = probs[0, pred].item()
+
+            # Assume class index 1 corresponds to 'unsafe' and 0 to 'safe'
+            label = "unsafe" if pred == 1 else "safe"
+            print(f"Safety filter result: {label.upper()} (conf {confidence:.2f})")
+            # Return True if SAFE, False if UNSAFE
+            return pred == 0 
 
     def run(self, do_zero_shot: bool = True) -> Dict[str, Any]:
+        # safety check
+        if not self._safety_check():
+            print("Image flagged as UNSAFE. Aborting pipeline.")
+            return {"error": "Image classified as UNSAFE. Aborting pipeline."}
+
+        print("Image passed safety filter. Continuing pipeline...")
+        
         overall_t0 = time.perf_counter()
         sam_ms = self._step_sam()
         classifier_ms = self._step_classifier()
