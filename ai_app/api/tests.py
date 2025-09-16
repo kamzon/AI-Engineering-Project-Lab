@@ -9,6 +9,7 @@ import io
 import tempfile
 import os
 from pathlib import Path
+from unittest import mock
 
 
 def _make_test_image_file(name: str = "test.png", size=(64, 64)) -> SimpleUploadedFile:
@@ -99,6 +100,25 @@ class CountViewTest(APITestCase):
         self.assertEqual(response.status_code, 201)
         self.assertIn("predicted_count", response.data)
         self.assertEqual(response.data.get("predicted_count"), 3)
+
+    @mock.patch("pipeline.models.safety.SafetyFilter.is_safe")
+    def test_count_view_unsafe_single_image(self, mock_is_safe):
+        # Force safety filter to mark image as unsafe
+        mock_is_safe.return_value = (False, {"pred_label": "unsafe", "unsafe_prob": 0.9, "threshold": 0.5})
+        img_file = _make_test_image_file()
+        data = {"object_type": "cat", "image": img_file}
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with override_settings(MEDIA_ROOT=Path(tmpdir), MEDIA_URL="/media/"):
+                response = self.client.post(self.url, data, format="multipart")
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("error", response.data)
+        self.assertEqual(response.data.get("error"), "Image is unsafe; processing aborted.")
+        # Make sure a Result exists and is marked rejected
+        result = Result.objects.order_by("-id").first()
+        self.assertIsNotNone(result)
+        self.assertEqual(result.status, "rejected")
 
 
 class GenerateViewTest(APITestCase):
