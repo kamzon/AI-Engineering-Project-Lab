@@ -6,6 +6,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.parsers import MultiPartParser, FormParser
 from django.shortcuts import get_object_or_404
+import json as _json
 from django.conf import settings
 from drf_spectacular.utils import extend_schema, OpenApiResponse, OpenApiExample
 from records.models import Result
@@ -76,6 +77,17 @@ class CountView(APIView):
                 pipeline_run.image_path = res.image.path
                 pipeline_run.candidate_labels = [res.object_type, 'other']
                 output = pipeline_run.run()
+                # If the pipeline aborted due to safety (or any error), mark as unsafe and stop early
+                if output.get("error"):
+                    # Preserve default predicted_count (0) and mark unsafe
+                    res.predicted_count = 0
+                    meta = {"error": output.get("error"), "unsafe": True, "pred_label": "unsafe"}
+                    # Merge any metadata the pipeline may have returned
+                    meta.update(output.get("metadata", {}))
+                    res.meta = meta
+                    res.status = "unsafe"
+                    res.save()
+                    return res
                 try:
                     record_pipeline_metrics(
                         output.get("metadata", {}), output.get(
@@ -83,8 +95,11 @@ class CountView(APIView):
                     )
                 except Exception:
                     logger.exception("Failed to record Prometheus metrics")
-                res.predicted_count = output.get(
-                    "label_counts", {}).get(res.object_type)
+                # Only assign predicted_count if present; otherwise keep default (0)
+                count_map = output.get("label_counts") or {}
+                count_val = count_map.get(res.object_type)
+                if count_val is not None:
+                    res.predicted_count = count_val
                 run_id = output.get("id")
                 panoptic_path = output.get("panoptic_path")
                 meta = {}
@@ -109,6 +124,7 @@ class CountView(APIView):
             except Exception as e:
                 logger.exception("Pipeline failed for Result id=%s", res.id)
                 res.status = "failed"
+                # Keep predicted_count at default (0) to satisfy NOT NULL constraints
                 res.meta = {"error": str(e)}
                 res.save()
             return res
@@ -156,6 +172,27 @@ class CorrectionView(APIView):
         corrected_count = validated["corrected_count"]
 
         result = get_object_or_404(Result, id=result_id)
+        # Disallow corrections for unsafe results (handle dict or JSON string in meta)
+        meta = result.meta
+        if isinstance(meta, str):
+            try:
+                meta = _json.loads(meta)
+            except Exception:
+                meta = {}
+        # Block corrections if the result was flagged unsafe/failed/processing/rejected, or meta indicates unsafe
+        meta_is_dict = isinstance(meta, dict)
+        meta_pred_label_unsafe = meta_is_dict and (meta.get("pred_label") == "unsafe")
+        meta_has_reason_unsafe = meta_is_dict and isinstance(meta.get("reason"), dict) and (
+            meta.get("reason", {}).get("pred_label") == "unsafe" or meta.get("reason", {}).get("unsafe") is True
+        )
+        meta_error_unsafe = meta_is_dict and isinstance(meta.get("error"), str) and ("unsafe" in meta.get("error").lower())
+        meta_flag_unsafe = meta_is_dict and (meta.get("unsafe") is True)
+        if result.status in ("unsafe", "failed", "processing", "rejected") or meta_flag_unsafe or meta_pred_label_unsafe or meta_has_reason_unsafe or meta_error_unsafe:
+            return Response({
+                "detail": "Corrections are not allowed for unsafe images.",
+                "id": result.id,
+                "status": result.status
+            }, status=status.HTTP_400_BAD_REQUEST)
         result.corrected_count = corrected_count
         result.status = "corrected"
         result.save()

@@ -135,7 +135,7 @@
       <h2 class="text-lg font-medium mb-3">Latest result</h2>
       <ul id="resultsList" class="list-none p-0 m-0 grid gap-3">
         {% if latest %}
-          <li id="r-{{ latest.id }}" class="grid gap-4 border border-base-300 rounded-xl p-3 bg-base-100">
+          <li id="r-{{ latest.id }}" class="grid gap-4 border border-base-300 rounded-xl p-3 bg-base-100" data-status="{{ latest.status }}">
             <div class="grid grid-cols-1 md:grid-cols-[200px_1fr_240px] gap-3 items-center">
               <div>
                 <img class="w-48 h-36 object-cover rounded-lg border border-base-300" src="{{ latest.image.url }}"
@@ -148,14 +148,23 @@
                   {% if latest.corrected_count %}
                   <div><strong>Corrected:</strong> <span class="corr">{{ latest.corrected_count }}</span></div>
                   {% endif %}
+                  {% if latest_is_unsafe %}
+                  <div class="alert alert-error mt-1">
+                    <span>This image won't be counted because it has unsafe content.{% if latest.meta.unsafe_prob %} (p_unsafe={{ latest.meta.unsafe_prob }}){% endif %}</span>
+                  </div>
+                  {% endif %}
                   <div class="text-sm text-base-content/60">{{ latest.created_at }}</div>
                 </div>
-                <form class="correctionForm flex flex-col gap-2 mt-1" data-id="{{ latest.id }}">
-                  {% csrf_token %}
-                  <input class="input input-bordered mx-auto w-32" type="number" name="corrected_count" min="0"
-                    placeholder="correct to…" />
-                <button type="submit" class="btn btn-sm">Submit correction</button>
-                </form>
+                {% if latest_is_unsafe %}
+                  <div class="text-sm text-error mt-1">Corrections are disabled for unsafe images.</div>
+                {% else %}
+                  <form class="correctionForm flex flex-col gap-2 mt-1" data-id="{{ latest.id }}">
+                    {% csrf_token %}
+                    <input class="input input-bordered mx-auto w-32" type="number" name="corrected_count" min="0"
+                      placeholder="correct to…" />
+                    <button type="submit" class="btn btn-sm">Submit correction</button>
+                  </form>
+                {% endif %}
             </div>
             
             {% if latest.meta.panoptic_url %}
@@ -186,6 +195,6 @@
     </div>
   </main>
 
-  <script src="{% static 'web/app.js' %}"></script>
+  <script src="{% static 'web/app.js' %}?v=20250916-1"></script>
 </body>
 </html>

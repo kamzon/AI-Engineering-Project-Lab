@@ -33,6 +33,17 @@ def index(request):
     object_types = finetuned_types or default_object_types
     background_types = ["random", "solid", "noise"]
     latest = Result.objects.order_by("-created_at").first()
+    latest_is_unsafe = False
+    if latest:
+        try:
+            meta = latest.meta
+            if isinstance(meta, dict):
+                latest_is_unsafe = latest.status in ("unsafe", "rejected") or bool(meta.get("unsafe") is True or meta.get("pred_label") == "unsafe")
+            else:
+                # Fallback: search for 'unsafe' in stringified meta
+                latest_is_unsafe = latest.status in ("unsafe", "rejected") or ("unsafe" in str(meta).lower())
+        except Exception:
+            latest_is_unsafe = latest.status in ("unsafe", "rejected")
     pref = ThemePreference.objects.first()
     current_theme = pref.theme if pref else "winter"
     # Ensure CSRF token present for JS fetch usage
@@ -42,6 +53,7 @@ def index(request):
         "index.html",
         {
             "latest": latest,
+            "latest_is_unsafe": latest_is_unsafe,
             "object_types": object_types,
             "background_types": background_types,
             "current_theme": current_theme,
@@ -51,8 +63,19 @@ def index(request):
 def history(request):
     # Return all results as JSON for the "Show history" button
     results = Result.objects.order_by("-created_at")
-    data = [
-        {
+    data = []
+    for r in results:
+        # Robust unsafe detection for corrections_allowed
+        is_unsafe = False
+        try:
+            meta = r.meta
+            if isinstance(meta, dict):
+                is_unsafe = r.status in ("unsafe", "rejected") or bool(meta.get("unsafe") is True or meta.get("pred_label") == "unsafe")
+            else:
+                is_unsafe = r.status in ("unsafe", "rejected") or ("unsafe" in str(meta).lower())
+        except Exception:
+            is_unsafe = r.status in ("unsafe", "rejected")
+        data.append({
             "id": r.id,
             "object_type": r.object_type,
             "status": r.status,
@@ -61,9 +84,8 @@ def history(request):
             "created_at": r.created_at.isoformat(),
             "image": r.image.url,
             "meta": r.meta,
-        }
-        for r in results
-    ]
+            "corrections_allowed": not is_unsafe,
+        })
     return JsonResponse(data, safe=False)
 
 

@@ -65,8 +65,8 @@
           // non-JSON response
         }
         if (!resp.ok) {
-          const msg = (data && (data.error || data.detail)) ? (data.error || data.detail) : (text || resp.statusText);
-          generateStatus.textContent = `Error: ${msg}`;
+          const msg = formatApiError(data, text, resp.statusText);
+          generateStatus.textContent = `Error (${resp.status}): ${msg}`;
         } else {
           generateStatus.textContent = "Images generated and uploaded.";
           // Show all results
@@ -115,19 +115,72 @@ function getStatusBadgeClass(status) {
       return "badge badge-warning";
     case "predicted":
       return "badge badge-info";
+    case "unsafe":
+      return "badge badge-error";
     case "failed":
       return "badge badge-error";
     case "corrected":
       return "badge badge-success";
+    case "rejected":
+      return "badge badge-error";
     default:
       return "badge";
   }
 }
 
+// Heuristic detection of unsafe results across variants
+function isUnsafeResult(data) {
+  const status = (data?.status || '').toString().toLowerCase();
+  const meta = data?.meta;
+  const reason = data?.reason;
+  const metaUnsafe = !!(meta && typeof meta === 'object' && (meta.unsafe === true || meta.pred_label === 'unsafe' || /unsafe/i.test(meta.error || '')));
+  const reasonUnsafe = !!(reason && ((typeof reason === 'object' && (reason.pred_label === 'unsafe' || reason.unsafe === true)) || (typeof reason === 'string' && /unsafe/i.test(reason))));
+  return status === 'unsafe' || status === 'rejected' || metaUnsafe || reasonUnsafe;
+}
+
+// Simple toast using DaisyUI classes; auto-removes after durationMs
+function showToast(message, type = 'error', durationMs = 10000) {
+  const container = document.createElement('div');
+  container.className = 'toast toast-top toast-end z-50';
+  const alert = document.createElement('div');
+  alert.className = `alert ${type === 'error' ? 'alert-error' : type === 'success' ? 'alert-success' : 'alert-info'}`;
+  const span = document.createElement('span');
+  span.textContent = message;
+  alert.appendChild(span);
+  container.appendChild(alert);
+  document.body.appendChild(container);
+  setTimeout(() => {
+    container.remove();
+  }, Math.max(0, durationMs || 0));
+}
+
+function formatApiError(data, rawText, statusText) {
+  if (!data) return rawText || statusText || "Request failed";
+  if (typeof data === 'string') return data;
+  if (data.error) return data.error;
+  if (data.detail) return data.detail;
+  // DRF validation errors come as { field: ["msg1", "msg2"], ... }
+  try {
+    const parts = [];
+    Object.entries(data).forEach(([key, val]) => {
+      const msgs = Array.isArray(val) ? val.join("; ") : (typeof val === 'string' ? val : JSON.stringify(val));
+      parts.push(`${key}: ${msgs}`);
+    });
+    return parts.join(" | ") || (rawText || statusText || "Bad Request");
+  } catch (_) {
+    return rawText || statusText || "Bad Request";
+  }
+}
+
 function resultItemHTML(data, csrfToken) {
   const panopticUrl = data.meta?.panoptic_url;
+  const safetyInfo = data.meta?.safety || data.reason;
+  const isUnsafe = (data.corrections_allowed === false) || isUnsafeResult(data);
+  const unsafeProb = typeof (safetyInfo?.unsafe_prob ?? data.meta?.unsafe_prob) === 'number'
+    ? (safetyInfo?.unsafe_prob ?? data.meta?.unsafe_prob).toFixed(2)
+    : (safetyInfo?.unsafe_prob ?? data.meta?.unsafe_prob);
   return `
-    <li id="r-${data.id}" class="grid gap-4 border border-base-300 rounded-xl p-3 bg-base-100">
+    <li id="r-${data.id}" class="grid gap-4 border border-base-300 rounded-xl p-3 bg-base-100" data-status="${(data.status||'').toString().toLowerCase()}" data-unsafe="${isUnsafe}">
       <div class="grid grid-cols-1 md:grid-cols-[200px_1fr_240px] gap-3 items-center">
         <div>
           <img class="w-48 h-36 object-cover rounded-lg border border-base-300" src="${data.image}" alt="${data.object_type}" />
@@ -137,13 +190,25 @@ function resultItemHTML(data, csrfToken) {
           <div><strong>Status:</strong> <span class="status ${getStatusBadgeClass(data.status)}">${data.status}</span></div>
           <div><strong>Predicted:</strong> <span class="pred">${data.predicted_count}</span></div>
           ${data.corrected_count !== null ? `<div><strong>Corrected:</strong> <span class="corr">${data.corrected_count}</span></div>` : ""}
+          ${isUnsafe ? `
+            <div class="alert alert-error mt-1">
+              <span>
+                This image won't be counted because it has unsafe content.
+                ${unsafeProb !== undefined ? `(p_unsafe=${unsafeProb})` : ''}
+              </span>
+            </div>
+          ` : ""}
           <div class="text-sm text-base-content/60">${new Date(data.created_at).toLocaleString()}</div>
         </div>
-        <form class="correctionForm flex flex-col gap-2 mt-1" data-id="${data.id}">
-          <input type="hidden" name="csrfmiddlewaretoken" value="${csrfToken}">
-          <input class="input input-bordered w-32 mx-auto" type="number" name="corrected_count" min="0" placeholder="correct to…">
-          <button type="submit" class="btn btn-sm">Submit correction</button>
-        </form>
+        ${isUnsafe ? `
+          <div class="text-sm text-error mt-1">Corrections are disabled for unsafe images.</div>
+        ` : `
+          <form class="correctionForm flex flex-col gap-2 mt-1" data-id="${data.id}">
+            <input type="hidden" name="csrfmiddlewaretoken" value="${csrfToken}">
+            <input class="input input-bordered w-32 mx-auto" type="number" name="corrected_count" min="0" placeholder="correct to…">
+            <button type="submit" class="btn btn-sm">Submit correction</button>
+          </form>
+        `}
       </div>
       ${panopticUrl ? `
             <figure class="diff aspect-[3/2]" tabindex="0">
@@ -214,16 +279,32 @@ document.addEventListener("DOMContentLoaded", () => {
       uploadBtnSpinner.classList.remove("hidden");
     }
 
+    let unsafeDetected = false;
     try {
       const resp = await fetch("/api/count/", {
         method: "POST",
         body: fd,
         headers: { "X-CSRFToken": csrf }
       });
-      const data = await resp.json();
+      const text = await resp.text();
+      let data = null;
+      try { data = text ? JSON.parse(text) : null; } catch (_) { /* non-JSON */ }
 
       if (!resp.ok) {
-        uploadStatus.textContent = `Error: ${data.detail || JSON.stringify(data)}`;
+        const unsafe = isUnsafeResult(data);
+        if (unsafe) {
+          const unsafeReason = data?.reason;
+          const unsafeProb = typeof unsafeReason?.unsafe_prob === 'number' ? unsafeReason.unsafe_prob.toFixed(2) : (unsafeReason?.unsafe_prob ?? data?.meta?.unsafe_prob);
+          uploadStatus.textContent = `Unsafe image: This image won't be counted.${unsafeProb ? ` (p_unsafe=${unsafeProb})` : ''}`;
+          unsafeDetected = true;
+          showToast("Unsafe image: This image won't be counted because it has unsafe content.", 'error', 10000);
+          if (data?.id) {
+            resultsList.insertAdjacentHTML("beforeend", resultItemHTML(data, csrf));
+          }
+        } else {
+          const msg = formatApiError(data, text, resp.statusText);
+          uploadStatus.textContent = `Error (${resp.status}): ${msg}`;
+        }
       } else {
         uploadStatus.textContent = "Done.";
         // Replace latest result(s) with new one(s)
@@ -232,6 +313,12 @@ document.addEventListener("DOMContentLoaded", () => {
         items.forEach(item => {
           resultsList.insertAdjacentHTML("beforeend", resultItemHTML(item, csrf));
         });
+        // If any item is unsafe, surface a clear message and persistent toast
+        if (items.some(isUnsafeResult)) {
+          uploadStatus.textContent = "Image rejected for safety – it was not counted.";
+          unsafeDetected = true;
+          showToast("Unsafe image: This image won't be counted because it has unsafe content.", 'error', 10000);
+        }
       }
     } catch (err) {
       uploadStatus.textContent = `Error: ${err}`;
@@ -242,7 +329,7 @@ document.addEventListener("DOMContentLoaded", () => {
         uploadBtnLabel.textContent = "Count";
         uploadBtnSpinner.classList.add("hidden");
       }
-      setTimeout(() => (uploadStatus.textContent = ""), 1500);
+      setTimeout(() => (uploadStatus.textContent = ""), unsafeDetected ? 10000 : 1500);
       uploadForm.reset();
     }
   });
@@ -253,6 +340,16 @@ document.addEventListener("DOMContentLoaded", () => {
     e.preventDefault();
 
     const form = e.target;
+    // Client-side guard: prevent corrections on unsafe items
+    const li = form.closest("li[id^='r-']");
+    if (li) {
+      const status = (li.dataset.status || '').toLowerCase();
+      const unsafeAttr = (li.dataset.unsafe || '').toString() === 'true';
+      if (unsafeAttr || status === 'unsafe' || status === 'rejected') {
+        showToast("Corrections are disabled for unsafe images.", 'error', 10000);
+        return;
+      }
+    }
     const id = form.dataset.id;
     const input = form.querySelector("input[name='corrected_count']");
     const csrf = form.querySelector("input[name='csrfmiddlewaretoken']")?.value || getCSRF();
