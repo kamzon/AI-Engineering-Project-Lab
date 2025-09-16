@@ -1,0 +1,6 @@
+{
+  "val_accuracy": 81.29900213827513,
+  "epochs": 5,
+  "batch_size": 32,
+  "learning_rate": 0.001
+}

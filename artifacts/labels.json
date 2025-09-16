@@ -1,0 +1,10 @@
+{
+  "class_names": [
+    "safe",
+    "unsafe"
+  ],
+  "class_to_idx": {
+    "safe": 0,
+    "unsafe": 1
+  }
+}

@@ -1,0 +1,11 @@
+file,pred_label,pred_idx,conf
+/Users/noureddinekamzon/Desktop/Summer2025/AI_Lab/group-1/playground/car2.jpg,safe,0,0.5288859605789185
+/Users/noureddinekamzon/Desktop/Summer2025/AI_Lab/group-1/playground/cat3.webp,safe,0,0.761049211025238
+/Users/noureddinekamzon/Desktop/Summer2025/AI_Lab/group-1/playground/cat2.jpg,safe,0,0.5862365961074829
+/Users/noureddinekamzon/Desktop/Summer2025/AI_Lab/group-1/playground/person.webp,unsafe,1,0.5043534636497498
+/Users/noureddinekamzon/Desktop/Summer2025/AI_Lab/group-1/playground/cat.png,unsafe,1,0.6494029760360718
+/Users/noureddinekamzon/Desktop/Summer2025/AI_Lab/group-1/playground/fictional_cat.png,safe,0,0.7019951939582825
+/Users/noureddinekamzon/Desktop/Summer2025/AI_Lab/group-1/playground/fictional_person.jpg,safe,0,0.9520164132118225
+/Users/noureddinekamzon/Desktop/Summer2025/AI_Lab/group-1/playground/fictional_cat2.jpg,unsafe,1,0.5930373072624207
+/Users/noureddinekamzon/Desktop/Summer2025/AI_Lab/group-1/playground/art_cat.webp,unsafe,1,0.5819355845451355
+/Users/noureddinekamzon/Desktop/Summer2025/AI_Lab/group-1/playground/cat4.avif,safe,0,0.7352830767631531
