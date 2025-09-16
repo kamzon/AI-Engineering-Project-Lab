@@ -1,4 +1,6 @@
 from typing import List
+import os
+from pathlib import Path
 
 
 class ModelConstants:
@@ -39,5 +41,13 @@ class ModelConstants:
     # If this directory exists, the pipeline will load the classifier from here instead
     # of the base `IMAGE_MODEL_ID`.
     FINETUNED_MODEL_DIR: str = "pipeline/finetuned"
+
+    # Safety model path (absolute) — defaults to repo_root/artifacts/model.pth
+    # Can be overridden by env var SAFETY_MODEL_PATH
+    _BASE_DIR = Path(__file__).resolve().parent.parent  # repo root (…/group-1)
+    SAFETY_MODEL_PATH: str = os.environ.get(
+        "SAFETY_MODEL_PATH",
+        str((_BASE_DIR / "artifacts" / "model.pth").resolve()),
+    )
 
 
