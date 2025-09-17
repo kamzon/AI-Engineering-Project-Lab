@@ -13,7 +13,7 @@ class ModelConstants:
 
     IMAGE_LONGEST_SIDE: int = 1024
     
-    IMAGE_RESIZE_SIZE: int = 640
+    IMAGE_RESIZE_SIZE: int = 256
 
     DEFAULT_CANDIDATE_LABELS: List[str] = [
         "person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat",

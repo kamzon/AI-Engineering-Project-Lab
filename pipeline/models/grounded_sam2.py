@@ -1,11 +1,11 @@
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Union
 
 import torch
 from PIL import Image
 from transformers import AutoModelForZeroShotObjectDetection, AutoProcessor
 
 from pipeline.config import ModelConstants
-from pipeline.utils.image_preprocessor import ImagePreprocessor
+from pipeline.utils.image_utils import ImageUtils
 
 
 class GroundedSAM2:
@@ -14,7 +14,7 @@ class GroundedSAM2:
         self._processor: Optional[AutoProcessor] = None
         self._detector: Optional[AutoModelForZeroShotObjectDetection] = None
         self._load_source: Optional[str] = None
-        self._pre = ImagePreprocessor(target_size=256)
+        self._target_size: int = ModelConstants.IMAGE_RESIZE_SIZE
 
     def _init(self) -> None:
         if self._processor is None or self._detector is None:
@@ -35,28 +35,6 @@ class GroundedSAM2:
                 ).to(self.device)
             )
 
-    def _to_pil(self, image: Union[Image.Image, torch.Tensor]) -> Image.Image:
-        if isinstance(image, Image.Image):
-            return image
-        if isinstance(image, torch.Tensor):
-            # Expect CHW tensor in [0,255] or [0,1]
-            tensor = image.detach().cpu()
-            if tensor.ndim == 3 and tensor.shape[0] in (1, 3):
-                chw = tensor
-            elif tensor.ndim == 3 and tensor.shape[2] in (1, 3):
-                chw = tensor.permute(2, 0, 1)
-            else:
-                raise ValueError(
-                    "Unsupported tensor shape for image; expected CHW or HWC with 1 or 3 channels"
-                )
-            if chw.max() <= 1.0:
-                chw = (chw * 255.0).round()
-            chw = chw.clamp(0, 255).byte()
-            np_img = chw.permute(1, 2, 0).numpy()
-            if np_img.shape[2] == 1:
-                return Image.fromarray(np_img[:, :, 0], mode="L").convert("RGB")
-            return Image.fromarray(np_img, mode="RGB")
-        raise TypeError("image must be a PIL.Image.Image or torch.Tensor")
 
     def detect(
         self,
@@ -76,9 +54,9 @@ class GroundedSAM2:
         if self._load_source is not None:
             print(f"Running detection using model from {self._load_source}")
 
-        pil_image_orig = self._to_pil(image)
+        pil_image_orig = ImageUtils.to_rgb(ImageUtils.ensure_pil_image(image))
         orig_w, orig_h = pil_image_orig.size
-        pil_image = self._pre.to_rgb_and_resize(pil_image_orig)
+        pil_image = ImageUtils.resize_square(pil_image_orig, self._target_size)
 
         # Build canonical mapping for label normalization
         def canon(s: str) -> str:

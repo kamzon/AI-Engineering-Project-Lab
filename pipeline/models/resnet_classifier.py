@@ -7,7 +7,7 @@ from transformers import AutoImageProcessor, AutoModelForImageClassification
 from pipeline.config import ModelConstants
 import os
 from PIL import Image
-from pipeline.utils.image_preprocessor import ImagePreprocessor
+from pipeline.utils.image_utils import ImageUtils
 
 
 class ResNetImageClassifier:
@@ -16,7 +16,7 @@ class ResNetImageClassifier:
         self._image_processor: Optional[AutoImageProcessor] = None
         self._class_model: Optional[AutoModelForImageClassification] = None
         self._load_source: Optional[str] = None
-        self._pre = ImagePreprocessor(target_size=256)
+        self._target_size: int = ModelConstants.IMAGE_RESIZE_SIZE
 
     def _init(self) -> None:
         if self._image_processor is None or self._class_model is None:
@@ -63,8 +63,8 @@ class ResNetImageClassifier:
                     segment.permute(1, 2, 0).cpu().numpy().astype(np.uint8)
                 )
                 # Convert to PIL, preprocess (RGB + 256 resize), then hand to HF processor
-                pil_img = Image.fromarray(img_hwc).convert("RGB")
-                pil_img = self._pre.to_rgb_and_resize(pil_img)
+                pil_img = ImageUtils.to_rgb(Image.fromarray(img_hwc))
+                pil_img = ImageUtils.resize_square(pil_img, self._target_size)
                 inputs = self._image_processor(images=pil_img, return_tensors="pt")
                 inputs = {k: v.to(self.device) for k, v in inputs.items()}
                 outputs = self._class_model(**inputs)

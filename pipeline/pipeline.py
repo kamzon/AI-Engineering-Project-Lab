@@ -4,8 +4,8 @@ import time
 from typing import Any, Dict, List, Optional
 
 import torch
-import torchvision.transforms as tf
 from PIL import Image
+import torchvision.transforms as tf
 
 from pipeline.metrics import MetricsCollector
 from pipeline.config import ModelConstants
@@ -14,7 +14,8 @@ from pipeline.models.grounded_sam2 import GroundedSAM2
 from pipeline.models.resnet_classifier import ResNetImageClassifier
 from pipeline.models.zero_shot import ZeroShotLabeler
 from pipeline.utils.visualization import PanopticVisualizer
-from pipeline.utils.segment_cropper import SegmentCropper
+from pipeline.utils.image_utils import ImageUtils
+from pipeline.utils.image_utils import ImageUtils
 
 
 class Pipeline:
@@ -22,20 +23,10 @@ class Pipeline:
     def __init__(
         self,
         image_path: str = "pipeline/inputs/image.png",
-        top_n: int = 10,
-        points_per_side: int = 16,
-        pred_iou_thresh: float = 0.7,
-        stability_score_thresh: float = 0.85,
-        min_mask_region_area: int = 500,
         background_fill: int = 188,
         device: Optional[str] = None,
     ) -> None:
         self.image_path = image_path
-        self.top_n = top_n
-        self.points_per_side = points_per_side
-        self.pred_iou_thresh = pred_iou_thresh
-        self.stability_score_thresh = stability_score_thresh
-        self.min_mask_region_area = min_mask_region_area
         self.background_fill = background_fill
         self.device = device or (
             "cuda" if torch.cuda.is_available() else "cpu")
@@ -43,7 +34,6 @@ class Pipeline:
 
         self._original_image: Optional[Image.Image] = None
         self._image: Optional[Image.Image] = None
-        self._image_tensor: Optional[torch.Tensor] = None
         self._detections: Optional[List[Dict[str, Any]]] = None
         self._segments: Optional[List[torch.Tensor]] = None
         self._predicted_classes: Optional[List[str]] = None
@@ -54,37 +44,7 @@ class Pipeline:
         self._overlay_path: Optional[str] = None
 
 
-    def _load_image(self) -> Image.Image:
-        if self._image is None:
-            self._original_image = Image.open(self.image_path)
-            image = self._original_image.convert("RGB")
-            target_longest_side = ModelConstants.IMAGE_LONGEST_SIDE
-            width, height = image.size
-            longest_side = max(width, height)
-            if longest_side != target_longest_side:
-                scale = target_longest_side / float(longest_side)
-                new_width = max(1, int(round(width * scale)))
-                new_height = max(1, int(round(height * scale)))
-                try:
-                    resample = Image.Resampling.LANCZOS
-                except AttributeError:
-                    resample = (
-                        getattr(Image, "LANCZOS", None)
-                        or getattr(Image, "BICUBIC", 0)
-                    )
-                image = image.resize(
-                    (new_width, new_height), resample=resample)
-            self._image = image
-        return self._image
-
-    def _to_image_tensor(self) -> torch.Tensor:
-        if self._image_tensor is None:
-            transform = tf.Compose([tf.PILToTensor()])
-            self._image_tensor = transform(self._load_image())
-        return self._image_tensor
-
-
-
+    
     def correct_predictions(
         self,
         classes: Optional[Dict[int, str]] = None,
@@ -126,7 +86,7 @@ class Pipeline:
         print(f"[Pipeline] detection_queries={detection_queries}")
         model = GroundedSAM2(device=self.device)
         detections = model.detect(
-            image=self._load_image(),
+            image=self._image,
             text_queries=detection_queries,
             box_threshold=ModelConstants.GROUNDING_BOX_THRESHOLD,
             text_threshold=ModelConstants.GROUNDING_TEXT_THRESHOLD,
@@ -135,8 +95,12 @@ class Pipeline:
         self._detections = detections
         
         # Crop segments from detections for ResNet classification
-        cropper = SegmentCropper(background_fill=self.background_fill)
-        self._segments = cropper.crop_segments_from_detections(self._load_image(), detections)
+        self._segments = ImageUtils.crop_segments_from_detections(
+            image=self._image,
+            detections=detections,
+            background_fill=self.background_fill,
+            min_size=32,
+        )
         print(f"[Pipeline] segments_cropped={len(self._segments)}")
         
         return (time.perf_counter() - t0) * 1000.0
@@ -166,7 +130,7 @@ class Pipeline:
     def _step_save_overlay(self, run_id: str) -> str:
         """Save detection overlay for frontend"""
         overlay_path = os.path.join("pipeline", "outputs", f"{run_id}_overlay.png")
-        PanopticVisualizer().save_detections(self._load_image(), self._detections or [], overlay_path)
+        PanopticVisualizer().save_detections(self._image, self._detections or [], overlay_path)
         self._overlay_path = overlay_path
         return overlay_path
 
@@ -216,7 +180,7 @@ class Pipeline:
             tf.Resize((224, 224)),
             tf.ToTensor()
         ])
-        image = transform(self._load_image()).unsqueeze(0).to(self.device)
+        image = transform(self._image).unsqueeze(0).to(self.device)
 
         with torch.no_grad():
             logits = self.safety_model(image)
@@ -239,6 +203,12 @@ class Pipeline:
 
 
     def run(self) -> Dict[str, Any]:
+        # Load and preprocess image once
+        self._original_image = Image.open(self.image_path).convert("RGB")
+        self._image = ImageUtils.resize_longest_side(
+            self._original_image, ModelConstants.IMAGE_LONGEST_SIDE
+        )
+
         # safety check
         if not self._safety_check():
             print("Image flagged as UNSAFE. Aborting pipeline.")
