@@ -34,7 +34,6 @@ urlpatterns = [
 ]
 
 if settings.DEBUG:
-    # OpenAPI schema & documentation only in DEBUG
     urlpatterns += [
         path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
         path(

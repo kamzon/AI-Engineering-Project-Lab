@@ -31,9 +31,19 @@ SECRET_KEY = os.getenv(
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv("DJANGO_DEBUG", "true").lower() == "true"
 
-# Allowed hosts (comma-separated in env)
-_env_hosts = os.getenv("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1,[::1]")
-ALLOWED_HOSTS = [h.strip() for h in _env_hosts.split(',') if h.strip()]
+# Allowed hosts (comma-separated in env). Ports are stripped.
+_env_hosts = os.getenv(
+    "DJANGO_ALLOWED_HOSTS",
+    "localhost,127.0.0.1,host.docker.internal,[::1]",
+)
+_hosts_raw = [h.strip() for h in _env_hosts.split(',') if h.strip()]
+ALLOWED_HOSTS = []
+for h in _hosts_raw:
+    if h.startswith('['):  # IPv6 literal like [::1]
+        ALLOWED_HOSTS.append(h)
+    else:
+        # strip :port if provided (ALLOWED_HOSTS doesn't take ports)
+        ALLOWED_HOSTS.append(h.split(':', 1)[0])
 
 
 # Application definition
@@ -165,7 +175,7 @@ TEMPLATES[0]["DIRS"] = [BASE_DIR / "templates"]
 # Frontend origins allowed to call this backend (comma-separated)
 _frontend_origins = os.getenv(
     "FRONTEND_ALLOWED_ORIGINS",
-    "http://localhost:8000,http://127.0.0.1:8000",
+    "http://localhost:8000,http://127.0.0.1:8000,http://host.docker.internal:8000",
 )
 FRONTEND_ALLOWED_ORIGINS = [o.strip().rstrip('/') for o in _frontend_origins.split(',') if o.strip()]
 
@@ -192,10 +202,6 @@ SECURE_SSL_REDIRECT = not DEBUG
 SECURE_HSTS_SECONDS = 31536000 if not DEBUG else 0
 SECURE_HSTS_INCLUDE_SUBDOMAINS = not DEBUG
 SECURE_HSTS_PRELOAD = not DEBUG
-
-# Honor X-Forwarded-Proto when behind a reverse proxy if enabled
-if os.getenv("USE_X_FORWARDED_PROTO", "false").lower() == "true":
-    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 # API path and origin enforcement toggle
 API_PATH_PREFIX = os.getenv("API_PATH_PREFIX", "/api/")
