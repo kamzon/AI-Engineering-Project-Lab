@@ -27,7 +27,8 @@ class ResNetImageClassifier:
                 else ModelConstants.IMAGE_MODEL_ID
             )
             self._load_source = load_source
-            print(f"Loading classifier from {load_source}") 
+            model_type = "Fine-Tuned ResNet" if load_source == finetuned_dir else "ResNet"
+            print(f"Loading {model_type} classifier from {load_source}") 
             if load_source == finetuned_dir:
                 try:
                     print(f"Fine-tuned directory contents: {os.listdir(finetuned_dir)}")
@@ -48,7 +49,9 @@ class ResNetImageClassifier:
         assert self._image_processor is not None
         assert self._class_model is not None
         if self._load_source is not None:
-            print(f"Running classification using model from {self._load_source}")
+            finetuned_dir = ModelConstants.FINETUNED_MODEL_DIR
+            model_type = "Fine-Tuned ResNet" if self._load_source == finetuned_dir else "ResNet"
+            print(f"Running classification using {model_type} model from {self._load_source}")
 
         predicted_classes: List[str] = []
         classifier_confidences: List[float] = []
@@ -73,10 +76,14 @@ class ResNetImageClassifier:
                     probs = torch.softmax(logits, dim=-1)
                     conf = float(probs.max(dim=-1).values.item())
                     classifier_confidences.append(conf)
-                    print(f"[ResNet] Segment {idx}: confidence={conf:.4f}, class='{predicted_class}'")
+                    finetuned_dir = ModelConstants.FINETUNED_MODEL_DIR
+                    model_type = "Fine-Tuned ResNet" if self._load_source == finetuned_dir else "ResNet"
+                    print(f"[{model_type}] Segment {idx}: confidence={conf:.4f}, class='{predicted_class}'")
                 except Exception:
                     classifier_confidences.append(float("nan"))
-                    print(f"[ResNet] Segment {idx}: confidence=nan, class='{predicted_class}'")
+                    finetuned_dir = ModelConstants.FINETUNED_MODEL_DIR
+                    model_type = "Fine-Tuned ResNet" if self._load_source == finetuned_dir else "ResNet"
+                    print(f"[{model_type}] Segment {idx}: confidence=nan, class='{predicted_class}'")
 
         return predicted_classes, classifier_confidences
 
