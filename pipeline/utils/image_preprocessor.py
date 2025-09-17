@@ -4,9 +4,11 @@ from PIL import Image, ImageFilter
 import numpy as np
 import random
 
+from pipeline.config import ModelConstants
+
 
 class ImagePreprocessor:
-    def __init__(self, target_size: int = 256) -> None:
+    def __init__(self, target_size: int = ModelConstants.IMAGE_RESIZE_SIZE) -> None:
         self.target_size = target_size
 
     def to_rgb_and_resize(self, image: Image.Image) -> Image.Image:

@@ -38,9 +38,7 @@ class ResNetImageClassifier:
                 load_source
             ).to(self.device)
             try:
-                id2label = getattr(self._class_model.config, "id2label", {})
                 problem_type = getattr(self._class_model.config, "problem_type", None)
-                print(f"Classifier config id2label: {id2label}")
                 print(f"Classifier config problem_type: {problem_type}")
             except Exception:
                 pass
