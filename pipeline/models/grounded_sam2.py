@@ -84,7 +84,7 @@ class GroundedSAM2:
         def canon(s: str) -> str:
             return s.strip().rstrip(".").lower()
         normalized_queries = [q.strip() for q in text_queries if q and q.strip()]
-        query_text = " ".join([q if q.endswith(".") else f"{q}." for q in normalized_queries])
+        query_text = f"one {normalized_queries[0]}"
         canon_to_query = {canon(q): q for q in normalized_queries}
         print(f"[GroundedSAM2] text_queries={normalized_queries}")
 
@@ -100,6 +100,7 @@ class GroundedSAM2:
         # Post-process using HF processor (different versions expose different helpers)
         target_sizes = torch.tensor([[orig_h, orig_w]], device=self.device)
         post_processed: Optional[List[Dict[str, Any]]] = None
+        print(f"[GroundedSAM2] query_text={query_text}, box_threshold={box_threshold}, text_threshold={text_threshold}")
         try:
             if hasattr(self._processor, "post_process_grounded_object_detection"):
                 post_processed = self._processor.post_process_grounded_object_detection(
