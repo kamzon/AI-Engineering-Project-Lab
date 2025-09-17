@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 from pathlib import Path
+import os
 
 from pipeline.pipeline import ModelConstants
 
@@ -22,12 +23,17 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-$nj8j=ocog9_g^*z(9h-8m*_*$9ym&%5fsb53#tdj%m&o-h+-5'
+SECRET_KEY = os.getenv(
+    "DJANGO_SECRET_KEY",
+    'django-insecure-$nj8j=ocog9_g^*z(9h-8m*_*$9ym&%5fsb53#tdj%m&o-h+-5',
+)
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.getenv("DJANGO_DEBUG", "true").lower() == "true"
 
-ALLOWED_HOSTS = []
+# Allowed hosts (comma-separated in env)
+_env_hosts = os.getenv("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1,[::1]")
+ALLOWED_HOSTS = [h.strip() for h in _env_hosts.split(',') if h.strip()]
 
 
 # Application definition
@@ -39,6 +45,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'corsheaders',
     "rest_framework",
     "drf_spectacular",
     "web",
@@ -61,8 +68,10 @@ SPECTACULAR_SETTINGS = {
 MIDDLEWARE = [
     "django_prometheus.middleware.PrometheusBeforeMiddleware",
     'django.middleware.security.SecurityMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
+    'config.middleware.RestrictAPIAccessMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
@@ -152,4 +161,44 @@ MEDIA_ROOT = BASE_DIR / "media"
 STATIC_URL = "/static/"
 TEMPLATES[0]["DIRS"] = [BASE_DIR / "templates"]
 
-ALLOWED_HOSTS = ["*"]
+# ---------- Security & CORS ----------
+# Frontend origins allowed to call this backend (comma-separated)
+_frontend_origins = os.getenv(
+    "FRONTEND_ALLOWED_ORIGINS",
+    "http://localhost:8000,http://127.0.0.1:8000",
+)
+FRONTEND_ALLOWED_ORIGINS = [o.strip().rstrip('/') for o in _frontend_origins.split(',') if o.strip()]
+
+# CORS: allow only the configured frontend origins
+CORS_ALLOWED_ORIGINS = FRONTEND_ALLOWED_ORIGINS
+CORS_ALLOW_CREDENTIALS = True
+
+# CSRF: trust only the same set of origins
+CSRF_TRUSTED_ORIGINS = FRONTEND_ALLOWED_ORIGINS
+
+# Cookies
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
+SESSION_COOKIE_HTTPONLY = True
+CSRF_COOKIE_HTTPONLY = False  # Keep false if frontend reads csrftoken cookie
+SESSION_COOKIE_SAMESITE = "Lax"
+CSRF_COOKIE_SAMESITE = "Lax"
+
+# Secure headers and HTTPS
+SECURE_CONTENT_TYPE_NOSNIFF = True
+X_FRAME_OPTIONS = "DENY"
+SECURE_REFERRER_POLICY = "same-origin"
+SECURE_SSL_REDIRECT = not DEBUG
+SECURE_HSTS_SECONDS = 31536000 if not DEBUG else 0
+SECURE_HSTS_INCLUDE_SUBDOMAINS = not DEBUG
+SECURE_HSTS_PRELOAD = not DEBUG
+
+# Honor X-Forwarded-Proto when behind a reverse proxy if enabled
+if os.getenv("USE_X_FORWARDED_PROTO", "false").lower() == "true":
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+# API path and origin enforcement toggle
+API_PATH_PREFIX = os.getenv("API_PATH_PREFIX", "/api/")
+ENFORCE_FRONTEND_ORIGIN = os.getenv("ENFORCE_FRONTEND_ORIGIN", "true").lower() == "true"
+
+
