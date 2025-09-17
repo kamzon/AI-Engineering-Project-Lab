@@ -87,6 +87,13 @@ class CountView(APIView):
                     res.meta = meta
                     res.status = "unsafe"
                     res.save()
+                    # Record metrics even for unsafe outcomes if metadata is present
+                    try:
+                        record_pipeline_metrics(
+                            output.get("metadata", {}), output.get("label_counts", {})
+                        )
+                    except Exception:
+                        logger.exception("Failed to record Prometheus metrics for unsafe outcome")
                     return res
                 try:
                     record_pipeline_metrics(

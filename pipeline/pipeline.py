@@ -227,7 +227,25 @@ class Pipeline:
         allowed, safety_info, safety_ms = self._safety_check()
         if not allowed:
             print("Image flagged as UNSAFE. Aborting pipeline.")
-            return {"error": "Image classified as UNSAFE. Aborting pipeline."}
+            # Build minimal metrics metadata even on unsafe exit
+            grounded_ms = 0.0
+            classifier_ms = 0.0
+            zero_shot_ms = 0.0
+            # Measure overall as just the safety time in this early-exit scenario
+            overall_t0 = time.perf_counter() - (safety_ms / 1000.0)
+            metadata = self._step_metrics(
+                safety_ms,
+                grounded_ms,
+                classifier_ms,
+                zero_shot_ms,
+                overall_t0,
+                safety_info,
+            )
+            return {
+                "error": "Image classified as UNSAFE. Aborting pipeline.",
+                "metadata": metadata,
+                "label_counts": self._build_label_counts(),
+            }
 
         print("Image passed safety filter. Continuing pipeline...")
         overall_t0 = time.perf_counter()
