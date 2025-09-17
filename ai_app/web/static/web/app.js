@@ -14,6 +14,16 @@
   const genRotate = document.getElementById("genRotate");
   const genNoise = document.getElementById("genNoise");
 
+  // Read static token (if provided via meta tag)
+  const tokenMeta = document.querySelector('meta[name="api-static-token"]');
+  const STATIC_API_TOKEN = tokenMeta ? tokenMeta.getAttribute('content') : '';
+
+  function withApiHeaders(base = {}) {
+    const headers = { ...(base || {}) };
+    if (STATIC_API_TOKEN) headers['X-API-Token'] = STATIC_API_TOKEN;
+    return headers;
+  }
+
   if (generateForm) {
     generateForm.addEventListener("submit", async (e) => {
       e.preventDefault();
@@ -50,10 +60,10 @@
         };
         const resp = await fetch("/api/generate/", {
           method: "POST",
-          headers: {
+          headers: withApiHeaders({
             "Content-Type": "application/json",
             "X-CSRFToken": csrf
-          },
+          }),
           body: JSON.stringify(payload)
         });
         const text = await resp.text();
@@ -326,7 +336,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const resp = await fetch("/api/count/", {
         method: "POST",
         body: fd,
-        headers: { "X-CSRFToken": csrf }
+        headers: withApiHeaders({ "X-CSRFToken": csrf })
       });
       const text = await resp.text();
       let data = null;
@@ -405,10 +415,10 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
       const resp = await fetch("/api/correct/", {
         method: "POST",
-        headers: {
+        headers: withApiHeaders({
           "Content-Type": "application/json",
           "X-CSRFToken": csrf
-        },
+        }),
         body: JSON.stringify({ result_id: id, corrected_count: value })
       });
       const data = await resp.json();

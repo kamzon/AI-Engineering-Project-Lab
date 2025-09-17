@@ -61,6 +61,7 @@ def index(request):
             "background_types": background_types,
             "current_theme": current_theme,
             "finetuned_available": bool(os.path.isdir(ModelConstants.FINETUNED_MODEL_DIR) and os.listdir(ModelConstants.FINETUNED_MODEL_DIR)),
+            "api_static_token": getattr(settings, "API_STATIC_TOKEN", ""),
         },
     )
 

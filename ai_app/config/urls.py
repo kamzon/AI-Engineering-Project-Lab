@@ -23,12 +23,14 @@ from drf_spectacular.views import (
     SpectacularRedocView,
     SpectacularSwaggerView,
 )
+from rest_framework.authtoken.views import obtain_auth_token
 
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path("api/", include("api.urls")),
     path('api/', include('records.urls')),
+    path('api/auth/token/', obtain_auth_token, name='api-token'),
     path("", include("web.urls")),
     path("prometheus/", include("django_prometheus.urls")),
 ]

@@ -35,6 +35,7 @@ DEBUG = os.getenv("DJANGO_DEBUG", "true").lower() == "true"
 _env_hosts = os.getenv(
     "DJANGO_ALLOWED_HOSTS",
     "localhost,127.0.0.1,host.docker.internal,[::1]",
+    
 )
 _hosts_raw = [h.strip() for h in _env_hosts.split(',') if h.strip()]
 ALLOWED_HOSTS = []
@@ -44,6 +45,10 @@ for h in _hosts_raw:
     else:
         # strip :port if provided (ALLOWED_HOSTS doesn't take ports)
         ALLOWED_HOSTS.append(h.split(':', 1)[0])
+
+# In DEBUG, allow all hosts for local/LAN testing unless explicitly disabled
+if DEBUG and os.getenv("DJANGO_ALLOW_ALL_HOSTS_IN_DEBUG", "true").lower() == "true":
+    ALLOWED_HOSTS = ["*"]
 
 
 # Application definition
@@ -81,6 +86,7 @@ MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
+    'config.middleware.StaticTokenMiddleware',
     'config.middleware.RestrictAPIAccessMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -177,7 +183,15 @@ _frontend_origins = os.getenv(
     "FRONTEND_ALLOWED_ORIGINS",
     "http://localhost:8000,http://127.0.0.1:8000,http://host.docker.internal:8000",
 )
-FRONTEND_ALLOWED_ORIGINS = [o.strip().rstrip('/') for o in _frontend_origins.split(',') if o.strip()]
+FRONTEND_ALLOWED_ORIGINS = [
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+    "http://0.0.0.0:8000",
+
+]
+
+CORS_ALLOWED_ORIGINS = FRONTEND_ALLOWED_ORIGINS
+CSRF_TRUSTED_ORIGINS = FRONTEND_ALLOWED_ORIGINS
 
 # CORS: allow only the configured frontend origins
 CORS_ALLOWED_ORIGINS = FRONTEND_ALLOWED_ORIGINS
@@ -205,7 +219,13 @@ SECURE_HSTS_PRELOAD = not DEBUG
 
 # API path and origin enforcement toggle
 API_PATH_PREFIX = os.getenv("API_PATH_PREFIX", "/api/")
-ENFORCE_FRONTEND_ORIGIN = os.getenv("ENFORCE_FRONTEND_ORIGIN", "true").lower() == "true"
+ENFORCE_FRONTEND_ORIGIN = os.getenv(
+    "ENFORCE_FRONTEND_ORIGIN",
+    "false" if DEBUG else "true",
+).lower() == "true"
+
+# Static token (used by middleware and optionally frontend)
+API_STATIC_TOKEN = os.getenv("API_STATIC_TOKEN", "default-static-token")
 
 
 # Image upload resolution constraints (used for friendly validation messages)
