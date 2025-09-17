@@ -30,15 +30,17 @@ urlpatterns = [
     path("api/", include("api.urls")),
     path('api/', include('records.urls')),
     path("", include("web.urls")),
-    # OpenAPI schema & documentation
-    path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
-    path(
-        "api/docs/",
-        SpectacularRedocView.as_view(url_name="schema"),
-        name="docs",
-    ),
     path("prometheus/", include("django_prometheus.urls")),
 ]
 
 if settings.DEBUG:
+    # OpenAPI schema & documentation only in DEBUG
+    urlpatterns += [
+        path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
+        path(
+            "api/docs/",
+            SpectacularRedocView.as_view(url_name="schema"),
+            name="docs",
+        ),
+    ]
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
