@@ -208,3 +208,9 @@ API_PATH_PREFIX = os.getenv("API_PATH_PREFIX", "/api/")
 ENFORCE_FRONTEND_ORIGIN = os.getenv("ENFORCE_FRONTEND_ORIGIN", "true").lower() == "true"
 
 
+# Image upload resolution constraints (used for friendly validation messages)
+IMAGE_UPLOAD_MIN_WIDTH = int(os.getenv("IMAGE_MIN_WIDTH", "64"))
+IMAGE_UPLOAD_MIN_HEIGHT = int(os.getenv("IMAGE_MIN_HEIGHT", "64"))
+IMAGE_UPLOAD_MAX_WIDTH = int(os.getenv("IMAGE_MAX_WIDTH", "8192"))
+IMAGE_UPLOAD_MAX_HEIGHT = int(os.getenv("IMAGE_MAX_HEIGHT", "8192"))
+

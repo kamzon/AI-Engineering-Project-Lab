@@ -3,7 +3,7 @@
   const generateBtn = document.getElementById("generateBtn");
   const generateBtnLabel = generateBtn?.querySelector(".btn-label");
   const generateBtnSpinner = generateBtn?.querySelector(".loading-spinner");
-  const generateStatus = document.getElementById("generateStatus");
+  const generateMessage = document.getElementById("generateMessage");
   const genNumImages = document.getElementById("genNumImages");
   const genMaxObjects = document.getElementById("genMaxObjects");
   // Selected type comes from a single textbox now
@@ -27,8 +27,7 @@
       const noise = genNoise.value;
       const backgroundVal = (genBackgroundInput?.value || "").trim();
       if (!numImages || !maxObjects || !selectedType || !backgroundVal) {
-        generateStatus.textContent = "Please fill all fields (type, background, rotate, counts).";
-        setTimeout(() => (generateStatus.textContent = ""), 2000);
+        setMessage(generateMessage, "Please fill all fields (type, background, rotate, counts).", 'error');
         return;
       }
       const csrf = getCSRF();
@@ -66,9 +65,9 @@
         }
         if (!resp.ok) {
           const msg = formatApiError(data, text, resp.statusText);
-          generateStatus.textContent = `Error (${resp.status}): ${msg}`;
+          setMessage(generateMessage, `Error (${resp.status}): ${msg}`, 'error');
         } else {
-          generateStatus.textContent = "Images generated and uploaded.";
+          setMessage(generateMessage, "Images generated and uploaded.", 'success');
           // Show all results
           if (data.results) {
             resultsList.innerHTML = "";
@@ -97,7 +96,7 @@
           }
         }
       } catch (err) {
-        generateStatus.textContent = `Error: ${err}`;
+        setMessage(generateMessage, `Error: ${err}`, 'error');
       } finally {
         generateBtn.disabled = false;
         const countBtn = document.getElementById("uploadBtn");
@@ -106,7 +105,7 @@
           generateBtnLabel.textContent = "Generate";
           generateBtnSpinner.classList.add("hidden");
         }
-        setTimeout(() => (generateStatus.textContent = ""), 2000);
+        // persist message until next submit
         // Keep form values so the user can adjust parameters; do not auto-reset
       }
     });
@@ -259,7 +258,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const uploadBtn = document.getElementById("uploadBtn");
   const uploadBtnLabel = uploadBtn.querySelector(".btn-label");
   const uploadBtnSpinner = uploadBtn.querySelector(".loading-spinner");
-  const uploadStatus = document.getElementById("uploadStatus");
+  const uploadMessage = document.getElementById("uploadMessage");
   const resultsList = document.getElementById("resultsList");
   const useFinetunedToggle = document.getElementById("useFinetunedToggle");
   const objectTypeSelect = document.getElementById("objectType");
@@ -338,18 +337,18 @@ document.addEventListener("DOMContentLoaded", () => {
         if (unsafe) {
           const unsafeReason = data?.reason;
           const unsafeProb = typeof unsafeReason?.unsafe_prob === 'number' ? unsafeReason.unsafe_prob.toFixed(2) : (unsafeReason?.unsafe_prob ?? data?.meta?.unsafe_prob);
-          uploadStatus.textContent = `Unsafe image: This image won't be counted.${unsafeProb ? ` (p_unsafe=${unsafeProb})` : ''}`;
+          setMessage(uploadMessage, `Unsafe image: This image won't be counted.${unsafeProb ? ` (p_unsafe=${unsafeProb})` : ''}`, 'error');
           unsafeDetected = true;
           showToast("Unsafe image: This image won't be counted because it has unsafe content.", 'error', 10000);
           if (data?.id) {
             resultsList.insertAdjacentHTML("beforeend", resultItemHTML(data, csrf));
           }
         } else {
-          const msg = formatApiError(data, text, resp.statusText);
-          uploadStatus.textContent = `Error (${resp.status}): ${msg}`;
+          const msg = formatUploadError(data, text, resp.statusText);
+          setMessage(uploadMessage, msg, 'error');
         }
       } else {
-        uploadStatus.textContent = "Done.";
+        setMessage(uploadMessage, "Done.", 'success');
         // Replace latest result(s) with new one(s)
         resultsList.innerHTML = "";
         const items = Array.isArray(data) ? data : [data];
@@ -358,13 +357,13 @@ document.addEventListener("DOMContentLoaded", () => {
         });
         // If any item is unsafe, surface a clear message and persistent toast
         if (items.some(isUnsafeResult)) {
-          uploadStatus.textContent = "Image rejected for safety – it was not counted.";
+          setMessage(uploadMessage, "Image rejected for safety – it was not counted.", 'error');
           unsafeDetected = true;
           showToast("Unsafe image: This image won't be counted because it has unsafe content.", 'error', 10000);
         }
       }
     } catch (err) {
-      uploadStatus.textContent = `Error: ${err}`;
+      setMessage(uploadMessage, `Error: ${err}`, 'error');
     } finally {
       uploadBtn.disabled = false;
       if (generateBtn) generateBtn.disabled = false;
@@ -372,7 +371,7 @@ document.addEventListener("DOMContentLoaded", () => {
         uploadBtnLabel.textContent = "Count";
         uploadBtnSpinner.classList.add("hidden");
       }
-      setTimeout(() => (uploadStatus.textContent = ""), unsafeDetected ? 10000 : 1500);
+      // Persist message until the next Count submit; no auto-clear
       uploadForm.reset();
     }
   });
@@ -462,3 +461,75 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 });
+
+// Helper to show persistent message blocks under buttons
+function setMessage(container, text, level = 'info') {
+  if (!container) return;
+  const cls = level === 'success' ? 'alert-success' : level === 'error' ? 'alert-error' : 'alert-info';
+  container.innerHTML = `<div class="alert ${cls}"><span>${escapeHtml(text || '')}</span></div>`;
+}
+
+function escapeHtml(str) {
+  return String(str)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+}
+
+// Format upload-specific errors nicely (e.g., resolution limits)
+function formatUploadError(data, rawText, statusText) {
+  if (!data || typeof data !== 'object') {
+    return formatApiError(data, rawText, statusText);
+  }
+  // Single file field error under "image"
+  if (data.image !== undefined) {
+    const err = Array.isArray(data.image) ? data.image[0] : data.image;
+    if (err && typeof err === 'object') {
+      const limits = err.limits || {};
+      const actual = err.actual || {};
+      const minW = parseInt(limits.min_width ?? limits.minWidth ?? 0, 10) || 0;
+      const minH = parseInt(limits.min_height ?? limits.minHeight ?? 0, 10) || 0;
+      const maxW = parseInt(limits.max_width ?? limits.maxWidth ?? 0, 10) || 0;
+      const maxH = parseInt(limits.max_height ?? limits.maxHeight ?? 0, 10) || 0;
+      const actW = actual.width !== undefined ? parseInt(actual.width, 10) : undefined;
+      const actH = actual.height !== undefined ? parseInt(actual.height, 10) : undefined;
+      const base = err.message || 'Please upload a valid image.';
+      let msg = base;
+      if (minW && minH && maxW && maxH) {
+        msg = `Please upload an image between ${minW}×${minH} and ${maxW}×${maxH} pixels.`;
+      }
+      if (actW && actH) {
+        msg += ` Your image is ${actW}×${actH}.`;
+      }
+      return msg;
+    }
+    if (typeof err === 'string') return err;
+  }
+  // Multiple files list error under "images": {index, error}
+  if (data.images !== undefined) {
+    const first = Array.isArray(data.images) ? data.images[0] : data.images;
+    const idx = first?.index;
+    const inner = first?.error;
+    if (inner && typeof inner === 'object') {
+      const limits = inner.limits || {};
+      const actual = inner.actual || {};
+      const minW = parseInt(limits.min_width ?? 0, 10) || 0;
+      const minH = parseInt(limits.min_height ?? 0, 10) || 0;
+      const maxW = parseInt(limits.max_width ?? 0, 10) || 0;
+      const maxH = parseInt(limits.max_height ?? 0, 10) || 0;
+      const actW = actual.width !== undefined ? parseInt(actual.width, 10) : undefined;
+      const actH = actual.height !== undefined ? parseInt(actual.height, 10) : undefined;
+      let msg = `Image ${typeof idx === 'number' ? `#${idx + 1} ` : ''}has an unsupported resolution.`;
+      if (minW && minH && maxW && maxH) {
+        msg += ` Allowed range is ${minW}×${minH} to ${maxW}×${maxH} pixels.`;
+      }
+      if (actW && actH) {
+        msg += ` This one is ${actW}×${actH}.`;
+      }
+      return msg;
+    }
+  }
+  return formatApiError(data, rawText, statusText);
+}

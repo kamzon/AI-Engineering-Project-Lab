@@ -90,12 +90,12 @@
           </div>
         </div>
         <div class="flex gap-2 justify-end mt-6 items-center">
-          <span id="generateStatus" class="text-base-content/60"></span>
           <button type="submit" id="generateBtn" class="btn btn-primary btn-md">
             <span class="btn-label">Generate</span>
             <span class="loading loading-spinner loading-xs hidden"></span>
           </button>
         </div>
+        <div id="generateMessage" class="mt-2"></div>
       </form>
     </section>
 
@@ -144,8 +144,8 @@
             <span class="loading loading-spinner loading-xs hidden"></span>
           </button>
           <a class="btn btn-sm" href="/api/docs/" target="_blank" rel="noopener">API Docs</a>
-          <span id="uploadStatus" class="text-base-content/60"></span>
         </div>
+        <div id="uploadMessage" class="mt-2"></div>
       </form>
     </section>
 
@@ -214,6 +214,6 @@
     </div>
   </main>
 
-  <script src="{% static 'web/app.js' %}?v=20250916-1"></script>
+  <script src="{% static 'web/app.js' %}?v=20250917-1"></script>
 </body>
 </html>
