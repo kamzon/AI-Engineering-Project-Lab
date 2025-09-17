@@ -7,11 +7,13 @@ class ModelConstants:
     # GroundingDINO configuration
     GROUNDING_DINO_MODEL_ID: str = "IDEA-Research/grounding-dino-base"
     GROUNDING_BOX_THRESHOLD: float = 0.15
-    GROUNDING_TEXT_THRESHOLD: float = 0.1
+    GROUNDING_TEXT_THRESHOLD: float = 0.5
 
     IMAGE_MODEL_ID: str = "microsoft/resnet-50"
 
     IMAGE_LONGEST_SIDE: int = 1024
+    
+    IMAGE_RESIZE_SIZE: int = 640
 
     DEFAULT_CANDIDATE_LABELS: List[str] = [
         "person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat",
@@ -48,5 +50,8 @@ class ModelConstants:
         "SAFETY_MODEL_PATH",
         str((_BASE_DIR / "artifacts" / "model.pth").resolve()),
     )
+    
+    # Safety filter configuration
+    SAFETY_CONFIDENCE_THRESHOLD: float = 0.80  # Only deny if unsafe prediction confidence > 80%
 
 

@@ -11,7 +11,10 @@ from pipeline.metrics import MetricsCollector
 from pipeline.config import ModelConstants
 from pipeline.models.safety import load_safety_model
 from pipeline.models.grounded_sam2 import GroundedSAM2
+from pipeline.models.resnet_classifier import ResNetImageClassifier
+from pipeline.models.zero_shot import ZeroShotLabeler
 from pipeline.utils.visualization import PanopticVisualizer
+from pipeline.utils.segment_cropper import SegmentCropper
 
 
 class Pipeline:
@@ -42,6 +45,7 @@ class Pipeline:
         self._image: Optional[Image.Image] = None
         self._image_tensor: Optional[torch.Tensor] = None
         self._detections: Optional[List[Dict[str, Any]]] = None
+        self._segments: Optional[List[torch.Tensor]] = None
         self._predicted_classes: Optional[List[str]] = None
         self._zero_shot_labels: Optional[List[str]] = None
         self._classifier_confidences: Optional[List[float]] = None
@@ -114,6 +118,7 @@ class Pipeline:
         }
 
     def _step_grounded(self) -> float:
+        """Step 1: Detect objects using GroundedSAM2"""
         t0 = time.perf_counter()
         print(f"[Pipeline] candidate_labels={self.candidate_labels}")
         # Use only the selected object type (first candidate) for detection
@@ -128,22 +133,57 @@ class Pipeline:
         )
         print(f"[Pipeline] detections_count={len(detections)}")
         self._detections = detections
-        # Derive classes directly from detection labels
-        self._predicted_classes = [d.get("label", "") for d in detections]
-        self._zero_shot_labels = list(self._predicted_classes)
-        print(f"[Pipeline] predicted_classes_count={len(self._predicted_classes)} by_label={ {l: self._predicted_classes.count(l) for l in set(self._predicted_classes)} }")
-        # Save detection overlay for frontend
-        run_id = uuid.uuid4().hex
-        overlay_path = os.path.join("pipeline", "outputs", f"{run_id}_overlay.png")
-        PanopticVisualizer().save_detections(self._load_image(), detections, overlay_path)
-        self._overlay_path = overlay_path
+        
+        # Crop segments from detections for ResNet classification
+        cropper = SegmentCropper(background_fill=self.background_fill)
+        self._segments = cropper.crop_segments_from_detections(self._load_image(), detections)
+        print(f"[Pipeline] segments_cropped={len(self._segments)}")
+        
         return (time.perf_counter() - t0) * 1000.0
+    
+    def _step_classifier(self) -> float:
+        """Step 2: Classify cropped segments using ResNet"""
+        t0 = time.perf_counter()
+        assert self._segments is not None
+        classifier = ResNetImageClassifier(device=self.device)
+        self._predicted_classes, self._classifier_confidences = classifier.classify(
+            self._segments
+        )
+        print(f"[Pipeline] resnet_classes_count={len(self._predicted_classes)} by_label={ {l: self._predicted_classes.count(l) for l in set(self._predicted_classes)} }")
+        return (time.perf_counter() - t0) * 1000.0
+    
+    def _step_zero_shot(self) -> float:
+        """Step 3: Group/refine labels using ZeroShotLabeler"""
+        t0 = time.perf_counter()
+        assert self._predicted_classes is not None
+        labeler = ZeroShotLabeler(device=self.device)
+        self._zero_shot_labels = labeler.label(
+            self._predicted_classes, self.candidate_labels
+        )
+        print(f"[Pipeline] zero_shot_labels_count={len(self._zero_shot_labels)} by_label={ {l: self._zero_shot_labels.count(l) for l in set(self._zero_shot_labels)} }")
+        return (time.perf_counter() - t0) * 1000.0
+    
+    def _step_save_overlay(self, run_id: str) -> str:
+        """Save detection overlay for frontend"""
+        overlay_path = os.path.join("pipeline", "outputs", f"{run_id}_overlay.png")
+        PanopticVisualizer().save_detections(self._load_image(), self._detections or [], overlay_path)
+        self._overlay_path = overlay_path
+        return overlay_path
 
     def _build_models_used(self) -> Dict[str, Any]:
+        # Report whether a fine-tuned classifier was used
+        classifier_source = (
+            ModelConstants.FINETUNED_MODEL_DIR
+            if os.path.isdir(ModelConstants.FINETUNED_MODEL_DIR)
+            and os.listdir(ModelConstants.FINETUNED_MODEL_DIR)
+            else ModelConstants.IMAGE_MODEL_ID
+        )
         return {
             "grounded": {
                 "dino_model": getattr(ModelConstants, "GROUNDING_DINO_MODEL_ID", "IDEA-Research/grounding-dino-base"),
-            }
+            },
+            "classifier": {"id": classifier_source},
+            "zero_shot": {"id": ModelConstants.ZERO_SHOT_MODEL_ID},
         }
 
     def _build_label_counts(self) -> Dict[str, int]:
@@ -152,7 +192,7 @@ class Pipeline:
         print(f"[Pipeline] label_counts={counts}")
         return counts
 
-    def _step_metrics(self, grounded_ms: float, overall_t0: float) -> Dict[str, Any]:
+    def _step_metrics(self, grounded_ms: float, classifier_ms: float, zero_shot_ms: float, overall_t0: float) -> Dict[str, Any]:
         metrics_collector = MetricsCollector()
         metadata = metrics_collector.build(
             image=self._original_image,
@@ -163,8 +203,8 @@ class Pipeline:
             classifier_confidences=self._classifier_confidences,
             timings_ms={
                 "sam_ms": grounded_ms,
-                "classifier_ms": 0.0,
-                "zero_shot_ms": 0.0,
+                "classifier_ms": classifier_ms,
+                "zero_shot_ms": zero_shot_ms,
                 "overall_ms": (time.perf_counter() - overall_t0) * 1000.0,
             },
         )
@@ -187,8 +227,15 @@ class Pipeline:
             # Assume class index 1 corresponds to 'unsafe' and 0 to 'safe'
             label = "unsafe" if pred == 1 else "safe"
             print(f"Safety filter result: {label.upper()} (conf {confidence:.2f})")
-            # Return True if SAFE, False if UNSAFE
-            return pred == 0 
+            
+            # Only deny if predicted as unsafe AND confidence > threshold
+            threshold = ModelConstants.SAFETY_CONFIDENCE_THRESHOLD
+            if pred == 1 and confidence > threshold:
+                print(f"Image DENIED: unsafe prediction with high confidence ({confidence:.2f} > {threshold})")
+                return False
+            else:
+                print(f"Image ALLOWED: {label} prediction with confidence {confidence:.2f}")
+                return True 
 
 
     def run(self) -> Dict[str, Any]:
@@ -199,13 +246,28 @@ class Pipeline:
 
         print("Image passed safety filter. Continuing pipeline...")
         overall_t0 = time.perf_counter()
+        
+        # Step 1: Object detection with GroundedSAM2
         grounded_ms = self._step_grounded()
-        metadata = self._step_metrics(grounded_ms, overall_t0)
+        
+        # Step 2: ResNet classification on cropped segments
+        classifier_ms = self._step_classifier()
+        
+        # Step 3: ZeroShot label grouping/refinement
+        zero_shot_ms = self._step_zero_shot()
+        
+        # Save overlay visualization
+        run_id = uuid.uuid4().hex
+        self._step_save_overlay(run_id)
+        
+        # Collect metrics
+        metadata = self._step_metrics(grounded_ms, classifier_ms, zero_shot_ms, overall_t0)
+        
         result: Dict[str, Any] = {
             "predicted_classes": self._predicted_classes,
             "zero_shot_labels": self._zero_shot_labels,
             "label_counts": self._build_label_counts(),
-            "id": uuid.uuid4().hex,
+            "id": run_id,
             "panoptic_path": self._overlay_path,
             "metadata": metadata,
             "detections": self._detections,
