@@ -69,6 +69,17 @@ OVERALL_RESPONSE_MS = Gauge(
     "pipeline_overall_response_ms", "Overall pipeline response time (ms) per run"
 )
 
+# Safety model metrics
+SAFETY_INFERENCE_MS = Gauge(
+    "pipeline_safety_inference_ms", "Safety model inference time (ms) per run"
+)
+SAFETY_CONFIDENCE = Gauge(
+    "pipeline_safety_confidence", "Safety model confidence score for predicted class"
+)
+SAFETY_RESULT = Gauge(
+    "pipeline_safety_result", "Safety classification result (value=1)", ["label"]
+)
+
 # Accuracy gauge (last computed accuracy across DB)
 ACCURACY = Gauge(
     "pipeline_accuracy", "Overall accuracy across records based on corrections"
@@ -184,6 +195,11 @@ def record_pipeline_metrics(metadata: Dict[str, Any], label_counts: Dict[str, in
     # Timings
     timings = metadata.get("inference_time_ms_per_model") or {}
     try:
+        if "safety_ms" in timings:
+            SAFETY_INFERENCE_MS.set(float(timings["safety_ms"]))
+    except Exception:
+        pass
+    try:
         if "sam_ms" in timings:
             SAM_INFERENCE_MS.set(float(timings["sam_ms"]))
     except Exception:
@@ -202,6 +218,21 @@ def record_pipeline_metrics(metadata: Dict[str, Any], label_counts: Dict[str, in
         overall_ms = metadata.get("overall_response_ms")
         if overall_ms is not None:
             OVERALL_RESPONSE_MS.set(float(overall_ms))
+    except Exception:
+        pass
+
+    # Safety metrics
+    safety = metadata.get("safety") or {}
+    try:
+        conf = safety.get("confidence")
+        if conf is not None:
+            SAFETY_CONFIDENCE.set(float(conf))
+    except Exception:
+        pass
+    try:
+        label = safety.get("label")
+        if isinstance(label, str) and label:
+            SAFETY_RESULT.labels(label=label).set(1)
     except Exception:
         pass
 

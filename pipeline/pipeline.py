@@ -159,7 +159,7 @@ class Pipeline:
         print(f"[Pipeline] label_counts={counts}")
         return counts
 
-    def _step_metrics(self, grounded_ms: float, classifier_ms: float, zero_shot_ms: float, overall_t0: float) -> Dict[str, Any]:
+    def _step_metrics(self, safety_ms: float, grounded_ms: float, classifier_ms: float, zero_shot_ms: float, overall_t0: float, safety_info: Dict[str, Any]) -> Dict[str, Any]:
         metrics_collector = MetricsCollector()
         metadata = metrics_collector.build(
             image=self._original_image,
@@ -169,16 +169,19 @@ class Pipeline:
             models_used=self._build_models_used(),
             classifier_confidences=self._classifier_confidences,
             timings_ms={
+                "safety_ms": safety_ms,
                 "sam_ms": grounded_ms,
                 "classifier_ms": classifier_ms,
                 "zero_shot_ms": zero_shot_ms,
                 "overall_ms": (time.perf_counter() - overall_t0) * 1000.0,
             },
+            safety=safety_info,
         )
         return metadata
     
-    def _safety_check(self) -> bool:
+    def _safety_check(self) -> (bool, Dict[str, Any], float):
         print("Running safety filter...")
+        t0 = time.perf_counter()
         transform = tf.Compose([
             tf.Resize((224, 224)),
             tf.ToTensor()
@@ -197,12 +200,20 @@ class Pipeline:
             
             # Only deny if predicted as unsafe AND confidence > threshold
             threshold = ModelConstants.SAFETY_CONFIDENCE_THRESHOLD
-            if pred == 1 and confidence > threshold:
+            allowed = not (pred == 1 and confidence > threshold)
+            if not allowed:
                 print(f"Image DENIED: unsafe prediction with high confidence ({confidence:.2f} > {threshold})")
-                return False
             else:
                 print(f"Image ALLOWED: {label} prediction with confidence {confidence:.2f}")
-                return True 
+
+            safety_info = {
+                "label": label,
+                "pred_index": pred,
+                "confidence": float(confidence),
+                "threshold": float(threshold),
+            }
+            elapsed_ms = (time.perf_counter() - t0) * 1000.0
+            return allowed, safety_info, elapsed_ms
 
 
     def run(self) -> Dict[str, Any]:
@@ -213,7 +224,8 @@ class Pipeline:
         )
 
         # safety check
-        if not self._safety_check():
+        allowed, safety_info, safety_ms = self._safety_check()
+        if not allowed:
             print("Image flagged as UNSAFE. Aborting pipeline.")
             return {"error": "Image classified as UNSAFE. Aborting pipeline."}
 
@@ -234,7 +246,7 @@ class Pipeline:
         self._step_save_overlay(run_id)
         
         # Collect metrics
-        metadata = self._step_metrics(grounded_ms, classifier_ms, zero_shot_ms, overall_t0)
+        metadata = self._step_metrics(safety_ms, grounded_ms, classifier_ms, zero_shot_ms, overall_t0, safety_info)
         
         result: Dict[str, Any] = {
             "predicted_classes": self._predicted_classes,

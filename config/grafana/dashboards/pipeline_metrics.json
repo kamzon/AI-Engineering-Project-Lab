@@ -31,6 +31,43 @@
     },
     {
       "type": "timeseries",
+      "title": "Safety Inference Time (ms)",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 110 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "targets": [
+        { "expr": "pipeline_safety_inference_ms", "legendFormat": "safety" }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Safety Confidence",
+      "gridPos": { "h": 6, "w": 12, "x": 0, "y": 118 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "targets": [
+        { "expr": "pipeline_safety_confidence", "instant": true }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+      }
+    },
+    {
+      "type": "piechart",
+      "title": "Safety Results",
+      "gridPos": { "h": 10, "w": 12, "x": 12, "y": 118 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "targets": [
+        { "expr": "sum by (label) (pipeline_safety_result)", "legendFormat": "{{label}}", "instant": true }
+      ],
+      "options": {
+        "legend": { "displayMode": "list", "placement": "right" },
+        "pieType": "pie",
+        "displayLabels": ["name", "percent", "value"],
+        "tooltip": { "mode": "single", "sort": "desc" },
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+      }
+    },
+    {
+      "type": "timeseries",
       "title": "Count of Objects",
       "gridPos": { "h": 8, "w": 24, "x": 0, "y": 12 },
       "datasource": { "type": "prometheus", "uid": "Prometheus" },
@@ -189,7 +226,7 @@
     {
       "type": "gauge",
       "title": "Accuracy",
-      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 118 },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 130 },
       "datasource": { "type": "prometheus", "uid": "Prometheus" },
       "targets": [
         { "expr": "pipeline_accuracy", "instant": true }
@@ -205,7 +242,7 @@
     {
       "type": "gauge",
       "title": "Precision",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 126 },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 138 },
       "datasource": { "type": "prometheus", "uid": "Prometheus" },
       "targets": [
         { "expr": "pipeline_precision", "instant": true }
@@ -221,7 +258,7 @@
     {
       "type": "gauge",
       "title": "Recall",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 126 },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 138 },
       "datasource": { "type": "prometheus", "uid": "Prometheus" },
       "targets": [
         { "expr": "pipeline_recall", "instant": true }
@@ -237,7 +274,7 @@
     {
       "type": "timeseries",
       "title": "Overall Response Time (ms)",
-      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 134 },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 146 },
       "datasource": { "type": "prometheus", "uid": "Prometheus" },
       "targets": [
         { "expr": "pipeline_overall_response_ms", "legendFormat": "overall" }

@@ -82,6 +82,7 @@ class MetricsCollector:
         models_used: Optional[Dict[str, Any]] = None,
         classifier_confidences: Optional[List[float]] = None,
         timings_ms: Optional[Dict[str, float]] = None,
+        safety: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         width: Optional[int] = None
         height: Optional[int] = None
@@ -178,6 +179,7 @@ class MetricsCollector:
                 k: float(v) for k, v in timings_ms.items()
             },
             "overall_response_ms": float(timings_ms.get("overall_ms", 0.0)) if "overall_ms" in timings_ms else None,
+            "safety": safety or {},
         }
 
 
