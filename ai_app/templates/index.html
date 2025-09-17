@@ -118,6 +118,25 @@
               <option value="{{ ot }}">{{ ot|title }}</option>
             {% endfor %}
           </select>
+          <template id="defaultObjectTypesTpl">
+            {% for ot in default_object_types %}
+              <option value="{{ ot }}">{{ ot|title }}</option>
+            {% endfor %}
+          </template>
+          <template id="finetunedObjectTypesTpl">
+            {% for ot in finetuned_object_types %}
+              <option value="{{ ot }}">{{ ot|title }}</option>
+            {% endfor %}
+          </template>
+        </div>
+        <div class="flex items-center gap-2 my-2">
+          <label class="w-36 text-base-content/60">Classifier</label>
+          <div class="flex items-center gap-3">
+            <input type="checkbox" id="useFinetunedToggle" class="toggle toggle-sm" {% if not finetuned_available %}disabled{% endif %}>
+            <span class="text-sm" id="useFinetunedLabel">
+              {% if finetuned_available %}Use fine‑tuned (if available){% else %}Fine‑tuned unavailable (using base ResNet){% endif %}
+            </span>
+          </div>
         </div>
         <div class="flex gap-2 justify-end mt-3">
           <button type="submit" id="uploadBtn" class="btn btn-primary btn-sm">

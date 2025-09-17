@@ -32,11 +32,8 @@ class ModelConstants:
 
     ZERO_SHOT_MODEL_ID: str = "typeform/distilbert-base-uncased-mnli"
 
-    FEW_SHOT_LR: float = 1e-4
-    FEW_SHOT_WEIGHT_DECAY: float = 0.0
     FEW_SHOT_MAX_EPOCHS: int = 3
     FEW_SHOT_BATCH_SIZE: int = 8
-    FEW_SHOT_FREEZE_BACKBONE: bool = True
 
     # Directory where a fine-tuned image classifier (and its processor) will be saved.
     # If this directory exists, the pipeline will load the classifier from here instead
@@ -52,6 +49,6 @@ class ModelConstants:
     )
     
     # Safety filter configuration
-    SAFETY_CONFIDENCE_THRESHOLD: float = 0.80  # Only deny if unsafe prediction confidence > 80%
+    SAFETY_CONFIDENCE_THRESHOLD: float = 0.50  # Only deny if unsafe prediction confidence > 80%
 
 

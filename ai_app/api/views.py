@@ -70,7 +70,7 @@ class CountView(APIView):
         images_list = validated.get("images")
 
         def process_one(uploaded_image):
-            pipeline_run = Pipeline()
+            pipeline_run = Pipeline(use_finetuned_classifier=validated.get("use_finetuned_classifier"))
             res = Result.objects.create(
                 image=uploaded_image, object_type=object_type, status="processing")
             try:

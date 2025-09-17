@@ -25,12 +25,15 @@ class Pipeline:
         image_path: str = "pipeline/inputs/image.png",
         background_fill: int = 188,
         device: Optional[str] = None,
+        use_finetuned_classifier: Optional[bool] = None,
     ) -> None:
         self.image_path = image_path
         self.background_fill = background_fill
         self.device = device or (
             "cuda" if torch.cuda.is_available() else "cpu")
         self.candidate_labels = ModelConstants.DEFAULT_CANDIDATE_LABELS
+        # None means auto (prefer finetuned if present)
+        self.use_finetuned_classifier: Optional[bool] = use_finetuned_classifier
 
         self._original_image: Optional[Image.Image] = None
         self._image: Optional[Image.Image] = None
@@ -109,7 +112,7 @@ class Pipeline:
         """Step 2: Classify cropped segments using ResNet"""
         t0 = time.perf_counter()
         assert self._segments is not None
-        classifier = ResNetImageClassifier(device=self.device)
+        classifier = ResNetImageClassifier(device=self.device, use_finetuned=self.use_finetuned_classifier)
         self._predicted_classes, self._classifier_confidences = classifier.classify(
             self._segments
         )
@@ -241,6 +244,8 @@ class Pipeline:
             "panoptic_path": self._overlay_path,
             "metadata": metadata,
             "detections": self._detections,
+            "finetuned_available": bool(os.path.isdir(ModelConstants.FINETUNED_MODEL_DIR) and os.listdir(ModelConstants.FINETUNED_MODEL_DIR)),
+            "using_finetuned": bool(self.use_finetuned_classifier) if self.use_finetuned_classifier is not None else bool(os.path.isdir(ModelConstants.FINETUNED_MODEL_DIR) and os.listdir(ModelConstants.FINETUNED_MODEL_DIR)),
         }
         return result
 

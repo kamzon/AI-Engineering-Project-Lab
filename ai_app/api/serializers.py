@@ -35,6 +35,10 @@ class CountRequestSerializer(serializers.Serializer):
     object_type = serializers.CharField(
         help_text="Which object type to count in the image.",
     )
+    use_finetuned_classifier = serializers.BooleanField(
+        required=False,
+        help_text="If true, force use finetuned classifier (when available). If false, force base. If omitted, auto.",
+    )
 
     def validate(self, attrs):
         single = attrs.get("image")

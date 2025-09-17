@@ -88,6 +88,13 @@
             objectTypeSelect.value = selectedType;
             objectTypeSelect.disabled = true;
           }
+          // Enable finetuned toggle if model now exists (backend returns finetuned_model_dir)
+          const toggle = document.getElementById("useFinetunedToggle");
+          const label = document.getElementById("useFinetunedLabel");
+          if (toggle && label && data && data.finetuned_model_dir) {
+            toggle.disabled = false;
+            label.textContent = "Use fine‑tuned (if available)";
+          }
         }
       } catch (err) {
         generateStatus.textContent = `Error: ${err}`;
@@ -254,6 +261,36 @@ document.addEventListener("DOMContentLoaded", () => {
   const uploadBtnSpinner = uploadBtn.querySelector(".loading-spinner");
   const uploadStatus = document.getElementById("uploadStatus");
   const resultsList = document.getElementById("resultsList");
+  const useFinetunedToggle = document.getElementById("useFinetunedToggle");
+  const objectTypeSelect = document.getElementById("objectType");
+  const defaultTpl = document.getElementById("defaultObjectTypesTpl");
+  const finetunedTpl = document.getElementById("finetunedObjectTypesTpl");
+
+  function setSelectOptionsFromTemplate(tpl) {
+    if (!tpl || !objectTypeSelect) return;
+    const html = tpl.innerHTML.trim();
+    if (!html) return;
+    const current = objectTypeSelect.value;
+    objectTypeSelect.innerHTML = '<option value="" disabled selected>Select type…</option>' + html;
+    const opt = Array.from(objectTypeSelect.options).find(o => o.value === current);
+    if (opt) objectTypeSelect.value = current;
+  }
+
+  function syncObjectTypeToggle() {
+    if (!useFinetunedToggle || !objectTypeSelect) return;
+    if (!useFinetunedToggle.disabled) {
+      if (useFinetunedToggle.checked) {
+        if (finetunedTpl && finetunedTpl.innerHTML.trim()) setSelectOptionsFromTemplate(finetunedTpl);
+      } else {
+        if (defaultTpl && defaultTpl.innerHTML.trim()) setSelectOptionsFromTemplate(defaultTpl);
+      }
+    }
+  }
+
+  if (useFinetunedToggle) {
+    useFinetunedToggle.addEventListener("change", syncObjectTypeToggle);
+    setTimeout(syncObjectTypeToggle, 0);
+  }
 
   uploadForm.addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -271,6 +308,12 @@ document.addEventListener("DOMContentLoaded", () => {
       files.forEach(file => fd.append("images", file));
     }
     fd.append("object_type", objectType);
+    if (useFinetunedToggle) {
+      // Only send if enabled; server treats missing as auto
+      if (!useFinetunedToggle.disabled) {
+        fd.append("use_finetuned_classifier", useFinetunedToggle.checked ? "true" : "false");
+      }
+    }
 
     uploadBtn.disabled = true;
     if (generateBtn) generateBtn.disabled = true;

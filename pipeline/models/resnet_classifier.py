@@ -11,21 +11,26 @@ from pipeline.utils.image_utils import ImageUtils
 
 
 class ResNetImageClassifier:
-    def __init__(self, device: Optional[str] = None) -> None:
+    def __init__(self, device: Optional[str] = None, use_finetuned: Optional[bool] = None) -> None:
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         self._image_processor: Optional[AutoImageProcessor] = None
         self._class_model: Optional[AutoModelForImageClassification] = None
         self._load_source: Optional[str] = None
         self._target_size: int = ModelConstants.IMAGE_RESIZE_SIZE
+        # None means auto: prefer finetuned if available, else base
+        self._use_finetuned: Optional[bool] = use_finetuned
 
     def _init(self) -> None:
         if self._image_processor is None or self._class_model is None:
             # Prefer a fine-tuned checkpoint if present
             finetuned_dir = ModelConstants.FINETUNED_MODEL_DIR
-            load_source = (
-                finetuned_dir if os.path.isdir(finetuned_dir) and os.listdir(finetuned_dir)
-                else ModelConstants.IMAGE_MODEL_ID
-            )
+            finetuned_exists = os.path.isdir(finetuned_dir) and os.listdir(finetuned_dir)
+            if self._use_finetuned is True and finetuned_exists:
+                load_source = finetuned_dir
+            elif self._use_finetuned is False:
+                load_source = ModelConstants.IMAGE_MODEL_ID
+            else:
+                load_source = finetuned_dir if finetuned_exists else ModelConstants.IMAGE_MODEL_ID
             self._load_source = load_source
             model_type = "Fine-Tuned ResNet" if load_source == finetuned_dir else "ResNet"
             print(f"Loading {model_type} classifier from {load_source}") 

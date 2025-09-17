@@ -29,8 +29,9 @@ def _get_finetuned_object_types():
 
 def index(request):
     default_object_types = getattr(settings, "OBJECT_TYPES", [])
-    finetuned_types = _get_finetuned_object_types()
-    object_types = finetuned_types or default_object_types
+    finetuned_types = _get_finetuned_object_types() or []
+    # Initial dropdown shows defaults; JS can swap to finetuned list when toggled
+    object_types = list(default_object_types)
     background_types = ["random", "solid", "noise"]
     latest = Result.objects.order_by("-created_at").first()
     latest_is_unsafe = False
@@ -55,8 +56,11 @@ def index(request):
             "latest": latest,
             "latest_is_unsafe": latest_is_unsafe,
             "object_types": object_types,
+            "default_object_types": default_object_types,
+            "finetuned_object_types": finetuned_types,
             "background_types": background_types,
             "current_theme": current_theme,
+            "finetuned_available": bool(os.path.isdir(ModelConstants.FINETUNED_MODEL_DIR) and os.listdir(ModelConstants.FINETUNED_MODEL_DIR)),
         },
     )
 
