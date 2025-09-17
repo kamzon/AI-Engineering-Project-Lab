@@ -9,10 +9,8 @@ from PIL import Image
 
 from pipeline.metrics import MetricsCollector
 from pipeline.config import ModelConstants
-from pipeline.models.resnet_classifier import ResNetImageClassifier
 from pipeline.models.safety import load_safety_model
-from pipeline.models.zero_shot import ZeroShotLabeler
-from pipeline.utils.masks import SamMaskUtils
+from pipeline.models.grounded_sam2 import GroundedSAM2
 from pipeline.utils.visualization import PanopticVisualizer
 
 
@@ -43,14 +41,14 @@ class Pipeline:
         self._original_image: Optional[Image.Image] = None
         self._image: Optional[Image.Image] = None
         self._image_tensor: Optional[torch.Tensor] = None
-        self._panoptic_map: Optional[torch.Tensor] = None
-        self._segments: Optional[List[torch.Tensor]] = None
+        self._detections: Optional[List[Dict[str, Any]]] = None
         self._predicted_classes: Optional[List[str]] = None
         self._zero_shot_labels: Optional[List[str]] = None
         self._classifier_confidences: Optional[List[float]] = None
         self.image_path = image_path
-        self.safety_model = load_safety_model(
-            ModelConstants.SAFETY_MODEL_PATH, self.device)  
+        self.safety_model = load_safety_model(ModelConstants.SAFETY_MODEL_PATH, self.device)  
+        self._overlay_path: Optional[str] = None
+
 
     def _load_image(self) -> Image.Image:
         if self._image is None:
@@ -88,132 +86,85 @@ class Pipeline:
         classes: Optional[Dict[int, str]] = None,
         labels: Optional[Dict[int, str]] = None,
     ) -> Dict[str, Any]:
-        if self._segments is None:
-            raise ValueError("No segments available. Run the pipeline first.")
+        if self._detections is None:
+            raise ValueError("No detections available. Run the pipeline first.")
 
         if self._predicted_classes is None:
-            # If predictions were not computed via run(), initialize placeholders
-            self._predicted_classes = ["" for _ in range(len(self._segments))]
+            self._predicted_classes = [d.get("label", "") for d in self._detections]
         if self._zero_shot_labels is None:
-            self._zero_shot_labels = ["" for _ in range(len(self._segments))]
+            self._zero_shot_labels = list(self._predicted_classes)
 
         if classes:
             for idx, value in classes.items():
-                if idx < 0 or idx >= len(self._segments):
-                    raise IndexError(f"Segment index out of range: {idx}")
+                if idx < 0 or idx >= len(self._detections):
+                    raise IndexError(f"Detection index out of range: {idx}")
                 self._predicted_classes[idx] = value
 
         if labels:
             for idx, value in labels.items():
-                if idx < 0 or idx >= len(self._segments):
-                    raise IndexError(f"Segment index out of range: {idx}")
+                if idx < 0 or idx >= len(self._detections):
+                    raise IndexError(f"Detection index out of range: {idx}")
                 self._zero_shot_labels[idx] = value
 
         return {
             "image": self._image,
-            "panoptic_map": self._panoptic_map,
-            "segments": self._segments,
+            "detections": self._detections,
             "predicted_classes": self._predicted_classes,
             "zero_shot_labels": self._zero_shot_labels,
         }
 
-    def _step_sam(self) -> float:
+    def _step_grounded(self) -> float:
         t0 = time.perf_counter()
-        sam_utils = SamMaskUtils(
-            device=self.device,
-            points_per_side=self.points_per_side,
-            pred_iou_thresh=self.pred_iou_thresh,
-            stability_score_thresh=self.stability_score_thresh,
-            min_mask_region_area=self.min_mask_region_area,
+        print(f"[Pipeline] candidate_labels={self.candidate_labels}")
+        # Use only the selected object type (first candidate) for detection
+        detection_queries: List[str] = [self.candidate_labels[0]] if self.candidate_labels else []
+        print(f"[Pipeline] detection_queries={detection_queries}")
+        model = GroundedSAM2(device=self.device)
+        detections = model.detect(
+            image=self._load_image(),
+            text_queries=detection_queries,
+            box_threshold=ModelConstants.GROUNDING_BOX_THRESHOLD,
+            text_threshold=ModelConstants.GROUNDING_TEXT_THRESHOLD,
         )
-        mask_generator = sam_utils.init_generator()
-        masks_sorted = SamMaskUtils.generate_sorted_masks(
-            self._load_image(), mask_generator)
-        # Build panoptic with adaptive controls:
-        # - keep at most top_n segments
-        # - stop early if coverage reaches 80%
-        # - drop segments smaller than 2% of the largest one
-        self._panoptic_map = SamMaskUtils.build_panoptic_map(
-            masks_sorted,
-            self._load_image().size,
-            self.top_n,
-            coverage_ratio=0.8,
-            min_rel_area=0.02,
-        )
-        # Merge small adjacent segments into the main object to reduce over-segmentation
-        self._panoptic_map = SamMaskUtils.merge_small_adjacent_segments(
-            self._panoptic_map, min_ratio=0.05
-        )
-        img_tensor = self._to_image_tensor()
-        self._segments = SamMaskUtils.crop_segments(
-            img_tensor, self._panoptic_map, self.background_fill)
+        print(f"[Pipeline] detections_count={len(detections)}")
+        self._detections = detections
+        # Derive classes directly from detection labels
+        self._predicted_classes = [d.get("label", "") for d in detections]
+        self._zero_shot_labels = list(self._predicted_classes)
+        print(f"[Pipeline] predicted_classes_count={len(self._predicted_classes)} by_label={ {l: self._predicted_classes.count(l) for l in set(self._predicted_classes)} }")
+        # Save detection overlay for frontend
+        run_id = uuid.uuid4().hex
+        overlay_path = os.path.join("pipeline", "outputs", f"{run_id}_overlay.png")
+        PanopticVisualizer().save_detections(self._load_image(), detections, overlay_path)
+        self._overlay_path = overlay_path
         return (time.perf_counter() - t0) * 1000.0
-
-    def _step_classifier(self) -> float:
-        t0 = time.perf_counter()
-        assert self._segments is not None
-        classifier = ResNetImageClassifier(device=self.device)
-        self._predicted_classes, self._classifier_confidences = classifier.classify(
-            self._segments
-        )
-        return (time.perf_counter() - t0) * 1000.0
-
-    def _step_zero_shot(self, do_zero_shot: bool) -> float:
-        zero_shot_ms = 0.0
-        if do_zero_shot:
-            t0 = time.perf_counter()
-            labeler = ZeroShotLabeler(device=self.device)
-            assert self._predicted_classes is not None
-            self._zero_shot_labels = labeler.label(
-                self._predicted_classes, self.candidate_labels
-            )
-            zero_shot_ms = (time.perf_counter() - t0) * 1000.0
-        return zero_shot_ms
-
-    def _step_save_panoptic(self, run_id: str) -> str:
-        panoptic_path = os.path.join("pipeline", "outputs", f"{run_id}.png")
-        assert self._panoptic_map is not None
-        PanopticVisualizer().save(
-            self._panoptic_map, panoptic_path, labels=self._zero_shot_labels, annotate=True)
-        return panoptic_path
 
     def _build_models_used(self) -> Dict[str, Any]:
-        # Report whether a fine-tuned classifier was used
-        classifier_source = (
-            ModelConstants.FINETUNED_MODEL_DIR
-            if os.path.isdir(ModelConstants.FINETUNED_MODEL_DIR)
-            and os.listdir(ModelConstants.FINETUNED_MODEL_DIR)
-            else ModelConstants.IMAGE_MODEL_ID
-        )
         return {
-            "sam": {
-                "variant": ModelConstants.SAM_VARIANT,
-                "checkpoint": ModelConstants.SAM_CHECKPOINT_FILENAME,
-            },
-            "classifier": {"id": classifier_source},
-            "zero_shot": {"id": ModelConstants.ZERO_SHOT_MODEL_ID},
+            "grounded": {
+                "dino_model": getattr(ModelConstants, "GROUNDING_DINO_MODEL_ID", "IDEA-Research/grounding-dino-base"),
+            }
         }
 
     def _build_label_counts(self) -> Dict[str, int]:
-        return {
-            label: sum(1 for l in (
-                self._zero_shot_labels or []) if l == label)
-            for label in self.candidate_labels
-        }
+        labels = self._zero_shot_labels or self._predicted_classes or []
+        counts = {label: sum(1 for l in labels if l == label) for label in self.candidate_labels}
+        print(f"[Pipeline] label_counts={counts}")
+        return counts
 
-    def _step_metrics(self, sam_ms: float, classifier_ms: float, zero_shot_ms: float, overall_t0: float) -> Dict[str, Any]:
+    def _step_metrics(self, grounded_ms: float, overall_t0: float) -> Dict[str, Any]:
         metrics_collector = MetricsCollector()
         metadata = metrics_collector.build(
             image=self._original_image,
-            segments=self._segments,
+            segments=self._detections,  # treated as segments for counting/area by metrics
             zero_shot_labels=self._zero_shot_labels,
             predicted_classes=self._predicted_classes,
             models_used=self._build_models_used(),
             classifier_confidences=self._classifier_confidences,
             timings_ms={
-                "sam_ms": sam_ms,
-                "classifier_ms": classifier_ms,
-                "zero_shot_ms": zero_shot_ms,
+                "sam_ms": grounded_ms,
+                "classifier_ms": 0.0,
+                "zero_shot_ms": 0.0,
                 "overall_ms": (time.perf_counter() - overall_t0) * 1000.0,
             },
         )
@@ -239,29 +190,25 @@ class Pipeline:
             # Return True if SAFE, False if UNSAFE
             return pred == 0 
 
-    def run(self, do_zero_shot: bool = True) -> Dict[str, Any]:
+
+    def run(self) -> Dict[str, Any]:
         # safety check
         if not self._safety_check():
             print("Image flagged as UNSAFE. Aborting pipeline.")
             return {"error": "Image classified as UNSAFE. Aborting pipeline."}
 
         print("Image passed safety filter. Continuing pipeline...")
-        
         overall_t0 = time.perf_counter()
-        sam_ms = self._step_sam()
-        classifier_ms = self._step_classifier()
-        zero_shot_ms = self._step_zero_shot(do_zero_shot)
-        run_id = uuid.uuid4().hex
-        panoptic_path = self._step_save_panoptic(run_id)
-        metadata = self._step_metrics(
-            sam_ms, classifier_ms, zero_shot_ms, overall_t0)
+        grounded_ms = self._step_grounded()
+        metadata = self._step_metrics(grounded_ms, overall_t0)
         result: Dict[str, Any] = {
             "predicted_classes": self._predicted_classes,
             "zero_shot_labels": self._zero_shot_labels,
             "label_counts": self._build_label_counts(),
-            "id": run_id,
-            "panoptic_path": panoptic_path,
+            "id": uuid.uuid4().hex,
+            "panoptic_path": self._overlay_path,
             "metadata": metadata,
+            "detections": self._detections,
         }
         return result
 

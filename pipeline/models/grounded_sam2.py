@@ -76,14 +76,19 @@ class GroundedSAM2:
         if self._load_source is not None:
             print(f"Running detection using model from {self._load_source}")
 
-        pil_image = self._to_pil(image)
-        pil_image = self._pre.to_rgb_and_resize(pil_image)
-        # GroundingDINO expects query text as dot-separated phrases.
-        # Ensure each query ends with a period.
-        normalized = [q.strip() for q in text_queries if q and q.strip()]
-        text = " ".join([q if q.endswith(".") else f"{q}." for q in normalized])
+        pil_image_orig = self._to_pil(image)
+        orig_w, orig_h = pil_image_orig.size
+        pil_image = self._pre.to_rgb_and_resize(pil_image_orig)
 
-        inputs = self._processor(images=pil_image, text=text, return_tensors="pt")
+        # Build canonical mapping for label normalization
+        def canon(s: str) -> str:
+            return s.strip().rstrip(".").lower()
+        normalized_queries = [q.strip() for q in text_queries if q and q.strip()]
+        query_text = " ".join([q if q.endswith(".") else f"{q}." for q in normalized_queries])
+        canon_to_query = {canon(q): q for q in normalized_queries}
+        print(f"[GroundedSAM2] text_queries={normalized_queries}")
+
+        inputs = self._processor(images=pil_image, text=query_text, return_tensors="pt")
         inputs = {k: (v.to(self.device) if isinstance(v, torch.Tensor) else v) for k, v in inputs.items()}
 
         self._detector.eval()
@@ -92,40 +97,40 @@ class GroundedSAM2:
 
         detections: List[Dict[str, Any]] = []
 
-        # Post-process using whichever helper is available (HF interfaces may differ)
+        # Post-process using HF processor (different versions expose different helpers)
+        target_sizes = torch.tensor([[orig_h, orig_w]], device=self.device)
         post_processed: Optional[List[Dict[str, Any]]] = None
-        target_sizes = torch.tensor([[pil_image.height, pil_image.width]], device=self.device)
         try:
-            # Most common in HF examples
-            post_processed = self._processor.post_process_grounding_object_detection(
-                outputs, inputs=inputs, box_threshold=box_threshold, text_threshold=text_threshold, target_sizes=target_sizes
-            )
-        except Exception:
-            try:
-                # Alternate naming seen in some versions
+            if hasattr(self._processor, "post_process_grounded_object_detection"):
                 post_processed = self._processor.post_process_grounded_object_detection(
-                    outputs, inputs=inputs, box_threshold=box_threshold, text_threshold=text_threshold, target_sizes=target_sizes
+                    outputs=outputs,
+                    box_threshold=box_threshold,
+                    text_threshold=text_threshold,
+                    target_sizes=target_sizes,
                 )
-            except Exception:
-                try:
-                    # Some repos attach a post-process util on the model
-                    post_processed = self._detector.post_process_grounding_object_detection(  # type: ignore[attr-defined]
-                        outputs, inputs=inputs, box_threshold=box_threshold, text_threshold=text_threshold, target_sizes=target_sizes
-                    )
-                except Exception as e:
-                    raise RuntimeError(
-                        f"Failed to post-process GroundingDINO outputs: {e}"
-                    )
+            elif hasattr(self._processor, "post_process_object_detection"):
+                # Fallback: generic object detection (no text threshold)
+                post_processed = self._processor.post_process_object_detection(
+                    outputs=outputs,
+                    threshold=box_threshold,
+                    target_sizes=target_sizes,
+                )
+            else:
+                raise AttributeError("No suitable post-process method on processor")
+        except Exception as e:
+            raise RuntimeError(f"Failed to post-process GroundingDINO outputs: {e}")
 
         if not post_processed:
+            print("[GroundedSAM2] post_processed is empty")
             return detections
 
         result = post_processed[0]
-        # Common keys: 'boxes' (xyxy), 'scores', 'labels' or 'phrases'
+        # Keys can include: 'boxes', 'scores', 'labels', 'text_labels', 'phrases'
         boxes = result.get("boxes")
         scores = result.get("scores")
-        labels = result.get("labels")
+        text_labels = result.get("text_labels")
         phrases = result.get("phrases")
+        labels = result.get("labels")
 
         # Move tensors to CPU numpy for easy handling
         if isinstance(boxes, torch.Tensor):
@@ -133,25 +138,29 @@ class GroundedSAM2:
         if isinstance(scores, torch.Tensor):
             scores = scores.detach().cpu()
 
-        # Derive human-readable labels
+        # Prefer text_labels when available per HF deprecation notice
         readable: List[str] = []
-        if isinstance(phrases, list) and phrases:
+        if isinstance(text_labels, list) and text_labels:
+            readable = [str(p) for p in text_labels]
+        elif isinstance(phrases, list) and phrases:
             readable = [str(p) for p in phrases]
         elif isinstance(labels, list) and labels:
             readable = [str(l) for l in labels]
         else:
-            # Fallback: try to map indices back to input queries when possible
             readable = ["object"] * (len(boxes) if boxes is not None else 0)
+        print(f"[GroundedSAM2] raw_labels={readable}")
 
         if boxes is not None and scores is not None:
             for i in range(len(boxes)):
                 xyxy = boxes[i].tolist()
                 score = float(scores[i]) if i < len(scores) else float("nan")
-                label = readable[i] if i < len(readable) else "object"
+                raw_label = readable[i] if i < len(readable) else "object"
+                canonical = canon_to_query.get(canon(raw_label), raw_label)
                 detections.append({
                     "bbox": [float(x) for x in xyxy],
-                    "label": label,
+                    "label": canonical,
                     "score": score,
                 })
+        print(f"[GroundedSAM2] detections={len(detections)} by_label={ {d['label']: sum(1 for x in detections if x['label']==d['label']) for d in detections} }")
 
         return detections

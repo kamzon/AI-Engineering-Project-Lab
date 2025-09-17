@@ -101,6 +101,16 @@ class MetricsCollector:
         if segments:
             areas: List[int] = []
             for seg in segments:
+                # Support detection dicts with 'bbox' = [x1,y1,x2,y2]
+                if isinstance(seg, dict) and "bbox" in seg:
+                    try:
+                        x1, y1, x2, y2 = seg["bbox"]
+                        w = max(0, int(round(float(x2) - float(x1))))
+                        h = max(0, int(round(float(y2) - float(y1))))
+                        areas.append(h * w)
+                        continue
+                    except Exception:
+                        pass
                 shape = getattr(seg, "shape", None)
                 h: Optional[int] = None
                 w: Optional[int] = None

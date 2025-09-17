@@ -4,11 +4,10 @@ from pathlib import Path
 
 
 class ModelConstants:
-    SAM_VARIANT: str = "vit_b"
-    SAM_CHECKPOINT_FILENAME: str = "sam_vit_b_01ec64.pth"
-    SAM_CHECKPOINT_URL: str = (
-        "https://dl.fbaipublicfiles.com/segment_anything/sam_vit_b_01ec64.pth"
-    )
+    # GroundingDINO configuration
+    GROUNDING_DINO_MODEL_ID: str = "IDEA-Research/grounding-dino-base"
+    GROUNDING_BOX_THRESHOLD: float = 0.15
+    GROUNDING_TEXT_THRESHOLD: float = 0.1
 
     IMAGE_MODEL_ID: str = "microsoft/resnet-50"
 
