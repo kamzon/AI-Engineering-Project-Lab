@@ -81,12 +81,48 @@ class GroundedSAM2:
         print(f"[GroundedSAM2] query_text={query_text}, box_threshold={box_threshold}, text_threshold={text_threshold}")
         try:
             if hasattr(self._processor, "post_process_grounded_object_detection"):
-                post_processed = self._processor.post_process_grounded_object_detection(
-                    outputs=outputs,
-                    box_threshold=box_threshold,
-                    text_threshold=text_threshold,
-                    target_sizes=target_sizes,
-                )
+                # Try the most recent signature first (keywords)
+                try:
+                    post_processed = self._processor.post_process_grounded_object_detection(
+                        outputs=outputs,
+                        box_threshold=box_threshold,
+                        text_threshold=text_threshold,
+                        target_sizes=target_sizes,
+                    )
+                except TypeError:
+                    # Try alternative signatures used in some versions
+                    tried = False
+                    try:
+                        # Some versions accept only outputs and target_sizes
+                        post_processed = self._processor.post_process_grounded_object_detection(
+                            outputs=outputs,
+                            target_sizes=target_sizes,
+                        )
+                        tried = True
+                    except TypeError:
+                        pass
+                    if not tried:
+                        try:
+                            # Some versions use a single threshold kwarg name
+                            post_processed = self._processor.post_process_grounded_object_detection(
+                                outputs=outputs,
+                                target_sizes=target_sizes,
+                                threshold=box_threshold,
+                            )
+                            tried = True
+                        except TypeError:
+                            pass
+                    if not tried:
+                        # Last resort: try positional arguments
+                        try:
+                            post_processed = self._processor.post_process_grounded_object_detection(
+                                outputs, target_sizes, box_threshold, text_threshold
+                            )
+                            tried = True
+                        except Exception:
+                            pass
+                    if not tried:
+                        raise
             elif hasattr(self._processor, "post_process_object_detection"):
                 # Fallback: generic object detection (no text threshold)
                 post_processed = self._processor.post_process_object_detection(
@@ -110,6 +146,34 @@ class GroundedSAM2:
         text_labels = result.get("text_labels")
         phrases = result.get("phrases")
         labels = result.get("labels")
+
+        # Apply threshold filtering if the processor didn't handle it
+        if boxes is not None and scores is not None:
+            try:
+                if isinstance(scores, torch.Tensor):
+                    score_mask = scores >= box_threshold
+                else:
+                    score_mask = [float(s) >= box_threshold for s in scores]
+
+                if isinstance(boxes, torch.Tensor):
+                    boxes = boxes[score_mask]
+                else:
+                    boxes = [b for b, m in zip(boxes, score_mask) if m]
+
+                if isinstance(scores, torch.Tensor):
+                    scores = scores[score_mask]
+                else:
+                    scores = [s for s, m in zip(scores, score_mask) if m]
+
+                if isinstance(text_labels, list) and len(text_labels) == len(score_mask):
+                    text_labels = [t for t, m in zip(text_labels, score_mask) if m]
+                if isinstance(phrases, list) and len(phrases) == len(score_mask):
+                    phrases = [p for p, m in zip(phrases, score_mask) if m]
+                if isinstance(labels, list) and len(labels) == len(score_mask):
+                    labels = [l for l, m in zip(labels, score_mask) if m]
+            except Exception:
+                # If any filtering fails, continue with unfiltered results
+                pass
 
         # Move tensors to CPU numpy for easy handling
         if isinstance(boxes, torch.Tensor):
