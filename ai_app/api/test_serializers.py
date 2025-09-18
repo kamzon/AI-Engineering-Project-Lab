@@ -31,11 +31,11 @@ class CountRequestSerializerTests(SimpleTestCase):
         # Should indicate which index failed
         self.assertIn("index", str(s.errors))
 
-    @override_settings(IMAGE_UPLOAD_MIN_WIDTH=128, IMAGE_UPLOAD_MIN_HEIGHT=128)
+    @override_settings(IMAGE_UPLOAD_MAX_WIDTH=128, IMAGE_UPLOAD_MAX_HEIGHT=128)
     def test_resolution_out_of_range(self):
-        # Use a small image that will violate min size
-        small = SimpleUploadedFile("unsafe.jpg", load_bytes("unsafe.jpg"), content_type="image/jpeg")
-        s = CountRequestSerializer(data={"object_type": "cat", "image": small})
+        # Use a large image that will violate max size
+        big = SimpleUploadedFile("big_resolution.jpg", load_bytes("big_resolution.jpg"), content_type="image/jpeg")
+        s = CountRequestSerializer(data={"object_type": "cat", "image": big})
         self.assertFalse(s.is_valid())
         self.assertIn("Image resolution out of allowed range", str(s.errors))
 
