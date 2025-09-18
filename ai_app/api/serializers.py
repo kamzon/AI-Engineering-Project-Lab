@@ -69,7 +69,18 @@ class CountRequestSerializer(serializers.Serializer):
                     uploaded.seek(0)
             except Exception:
                 pass
-        except (UnidentifiedImageError, OSError, Image.DecompressionBombError):
+        except Image.DecompressionBombError:
+            # Extremely large image - report as resolution out of allowed range
+            raise serializers.ValidationError({
+                "message": "Image resolution out of allowed range.",
+                "limits": {
+                    "min_width": int(min_w),
+                    "min_height": int(min_h),
+                    "max_width": int(max_w),
+                    "max_height": int(max_h),
+                },
+            })
+        except (UnidentifiedImageError, OSError):
             raise serializers.ValidationError({
                 "message": "Upload a valid image. The file appears invalid, too large, or corrupted.",
                 "limits": {
