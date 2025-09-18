@@ -225,7 +225,7 @@
     },
     {
       "type": "gauge",
-      "title": "Accuracy",
+      "title": "(ResNet) Accuracy",
       "gridPos": { "h": 8, "w": 24, "x": 0, "y": 130 },
       "datasource": { "type": "prometheus", "uid": "Prometheus" },
       "targets": [
@@ -241,7 +241,7 @@
     },
     {
       "type": "gauge",
-      "title": "Precision",
+      "title": "(ResNet) Precision",
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 138 },
       "datasource": { "type": "prometheus", "uid": "Prometheus" },
       "targets": [
@@ -257,7 +257,7 @@
     },
     {
       "type": "gauge",
-      "title": "Recall",
+      "title": "(ResNet) Recall",
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 138 },
       "datasource": { "type": "prometheus", "uid": "Prometheus" },
       "targets": [

@@ -84,8 +84,8 @@ class Pipeline:
         """Step 1: Detect objects using GroundedSAM2"""
         t0 = time.perf_counter()
         print(f"[Pipeline] candidate_labels={self.candidate_labels}")
-        # Use only the selected object type (first candidate) for detection
-        detection_queries: List[str] = [self.candidate_labels[0]] if self.candidate_labels else []
+        # Query all candidate labels to maximize recall
+        detection_queries: List[str] = list(self.candidate_labels) if self.candidate_labels else []
         print(f"[Pipeline] detection_queries={detection_queries}")
         model = GroundedSAM2(device=self.device)
         detections = model.detect(
@@ -133,7 +133,18 @@ class Pipeline:
     def _step_save_overlay(self, run_id: str) -> str:
         """Save detection overlay for frontend"""
         overlay_path = os.path.join("pipeline", "outputs", f"{run_id}_overlay.png")
-        PanopticVisualizer().save_detections(self._image, self._detections or [], overlay_path)
+        # Attach ResNet labels/confidences to detections for visualization
+        detections_with_labels: List[Dict[str, Any]] = list(self._detections or [])
+        if detections_with_labels and self._predicted_classes is not None:
+            for i, det in enumerate(detections_with_labels):
+                try:
+                    det["resnet_label"] = self._predicted_classes[i]
+                    if self._classifier_confidences is not None and i < len(self._classifier_confidences):
+                        det["resnet_conf"] = float(self._classifier_confidences[i])
+                except Exception:
+                    # Best-effort enrichment; continue on any mismatch
+                    pass
+        PanopticVisualizer().save_detections(self._image, detections_with_labels, overlay_path)
         self._overlay_path = overlay_path
         return overlay_path
 

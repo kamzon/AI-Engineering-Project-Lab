@@ -6,8 +6,8 @@ from pathlib import Path
 class ModelConstants:
     # GroundingDINO configuration
     GROUNDING_DINO_MODEL_ID: str = "IDEA-Research/grounding-dino-base"
-    GROUNDING_BOX_THRESHOLD: float = 0.15
-    GROUNDING_TEXT_THRESHOLD: float = 0.5
+    GROUNDING_BOX_THRESHOLD: float = 0.1
+    GROUNDING_TEXT_THRESHOLD: float = 0.1
 
     IMAGE_MODEL_ID: str = "microsoft/resnet-50"
 
@@ -29,6 +29,7 @@ class ModelConstants:
         "book", "clock", "vase", "scissors", "teddy bear", "hair drier", "toothbrush",
         "building", "road", "sky", "ground", "water"
     ]
+    DEFAULT_CANDIDATE_LABELS.sort()
 
     ZERO_SHOT_MODEL_ID: str = "typeform/distilbert-base-uncased-mnli"
 
@@ -49,6 +50,6 @@ class ModelConstants:
     )
     
     # Safety filter configuration
-    SAFETY_CONFIDENCE_THRESHOLD: float = 0.50  # Only deny if unsafe prediction confidence > 80%
+    SAFETY_CONFIDENCE_THRESHOLD: float = 0.80  # Only deny if unsafe prediction confidence > 80%
 
 

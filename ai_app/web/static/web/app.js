@@ -293,7 +293,7 @@ function resultItemHTML(data, csrfToken) {
     <li id="r-${data.id}" class="grid gap-4 border border-base-300 rounded-xl p-3 bg-base-100" data-status="${(data.status||'').toString().toLowerCase()}" data-unsafe="${isUnsafe}">
       <div class="grid grid-cols-1 md:grid-cols-[200px_1fr_240px] gap-3 items-center">
         <div>
-          <img class="w-48 h-36 object-cover rounded-lg border border-base-300" src="${data.image}" alt="${data.object_type}" />
+          <img class="w-48 h-36 object-contain bg-base-200 rounded-lg border border-base-300" src="${data.image}" alt="${data.object_type}" />
         </div>
         <div class="info grid gap-1">
           <div><strong>Type:</strong> ${data.object_type}</div>

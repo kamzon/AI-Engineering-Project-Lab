@@ -25,8 +25,12 @@ class PanopticVisualizer:
             if not isinstance(bbox, (list, tuple)) or len(bbox) != 4:
                 continue
             x1, y1, x2, y2 = [float(x) for x in bbox]
-            label = str(det.get("label") or "object")
-            score = det.get("score")
+            # Prefer ResNet classification label/confidence if present
+            preferred_label = det.get("resnet_label") or det.get("label") or "object"
+            label = str(preferred_label)
+            score = det.get("resnet_conf")
+            if score is None:
+                score = det.get("score")
             outline = (0, 255, 0)
             try:
                 draw.rectangle([x1, y1, x2, y2], outline=outline, width=2)

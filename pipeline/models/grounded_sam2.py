@@ -56,13 +56,18 @@ class GroundedSAM2:
 
         pil_image_orig = ImageUtils.to_rgb(ImageUtils.ensure_pil_image(image))
         orig_w, orig_h = pil_image_orig.size
-        pil_image = ImageUtils.resize_square(pil_image_orig, self._target_size)
+        # Use original image; let the processor handle resizing internally for best recall
+        pil_image = pil_image_orig
 
         # Build canonical mapping for label normalization
         def canon(s: str) -> str:
             return s.strip().rstrip(".").lower()
         normalized_queries = [q.strip() for q in text_queries if q and q.strip()]
-        query_text = f"one {normalized_queries[0]}"
+        if not normalized_queries:
+            return []
+        # Build GroundingDINO text prompt with dot-separated categories, e.g., "person . cat . dog ."
+        query_parts = [q if q.endswith(".") else f"{q} ." for q in normalized_queries]
+        query_text = " ".join(query_parts)
         canon_to_query = {canon(q): q for q in normalized_queries}
         print(f"[GroundedSAM2] text_queries={normalized_queries}")
 
