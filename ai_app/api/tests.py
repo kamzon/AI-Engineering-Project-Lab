@@ -144,6 +144,25 @@ class CountViewTest(APITestCase):
         self.assertIn("predicted_count", response.data)
         self.assertEqual(response.data.get("predicted_count"), 0)
 
+    @patch("pipeline.pipeline.Pipeline.run")
+    @override_settings(API_STATIC_TOKEN="")
+    def test_count_view_multiple_images(self, mock_run):
+        mock_run.return_value = {
+            "predicted_classes": ["cat"],
+            "zero_shot_labels": ["cat"],
+            "label_counts": {"cat": 1, "other": 0},
+            "id": "rid",
+            "panoptic_path": None,
+            "metadata": {},
+        }
+        img1 = _load_input_image("cat.png")
+        img2 = _load_input_image("car.webp")
+        payload = {"object_type": "cat", "images": [img1, img2]}
+        response = self.client.post(self.url, payload, format="multipart")
+        self.assertEqual(response.status_code, 201)
+        self.assertIsInstance(response.data, list)
+        self.assertEqual(len(response.data), 2)
+
 
 @override_settings(API_STATIC_TOKEN="")
 class GenerateViewTest(APITestCase):
