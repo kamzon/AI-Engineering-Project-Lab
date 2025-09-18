@@ -32,7 +32,7 @@ def _load_input_image(filename: str) -> SimpleUploadedFile:
 
 
 @override_settings(API_STATIC_TOKEN="")
-class CorrectionViewTest(APITestCase):
+class TestCorrectionView(APITestCase):
     def setUp(self):
         # Minimal Result entry; image path field can be empty for this test
         self.result = Result.objects.create(
@@ -71,7 +71,7 @@ class CorrectionViewTest(APITestCase):
         self.assertIn("Corrections are not allowed", response.data.get("detail", ""))
 
 
-class CountViewTest(APITestCase):
+class TestCountView(APITestCase):
     def setUp(self):
         self.url = reverse("count")
 
@@ -165,7 +165,7 @@ class CountViewTest(APITestCase):
 
 
 @override_settings(API_STATIC_TOKEN="")
-class GenerateViewTest(APITestCase):
+class TestGenerateView(APITestCase):
     def setUp(self):
         self.url = reverse("generate")
 

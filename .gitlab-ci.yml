@@ -18,7 +18,7 @@ test:
     - pip install coverage
     - python ai_app/manage.py migrate --noinput   
   script:
-    - coverage run --source='ai_app' ai_app/manage.py test
+    - coverage run --source='ai_app' ai_app/manage.py test api config records web
     - coverage xml -o ai_app/coverage.xml
     - coverage html -d ai_app/htmlcov
     - coverage report -m
