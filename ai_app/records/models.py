@@ -4,6 +4,7 @@ class Result(models.Model):
     image = models.ImageField(upload_to="uploads/%Y/%m/%d/")
     object_type = models.CharField(max_length=64)
     predicted_count = models.IntegerField(default=0)
+    predicted_other_count = models.IntegerField(default=0)
     corrected_count = models.IntegerField(null=True, blank=True)
     status = models.CharField(max_length=16, default="pending")  # pending/predicted/corrected
     meta = models.JSONField(default=dict, blank=True)

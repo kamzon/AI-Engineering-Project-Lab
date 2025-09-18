@@ -105,8 +105,11 @@ class CountView(APIView):
                 # Only assign predicted_count if present; otherwise keep default (0)
                 count_map = output.get("label_counts") or {}
                 count_val = count_map.get(res.object_type)
+                count_other = count_map.get("other")
                 if count_val is not None:
                     res.predicted_count = count_val
+                if count_other is not None:
+                    res.predicted_other_count = count_other
                 run_id = output.get("id")
                 panoptic_path = output.get("panoptic_path")
                 meta = {}
