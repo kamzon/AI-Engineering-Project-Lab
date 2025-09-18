@@ -99,6 +99,16 @@
           </button>
         </div>
         <div id="generateMessage" class="mt-2"></div>
+        <div id="previewSection" class="mt-4 hidden">
+          <h3 class="text-lg font-semibold mb-2">Preview</h3>
+          <div id="previewGrid" class="grid grid-cols-2 md:grid-cols-4 gap-3"></div>
+          <div class="flex gap-2 justify-end mt-3 items-center">
+            <button type="button" id="startFinetuneBtn" class="btn btn-secondary btn-md">
+              <span class="btn-label">Start fine‑tuning</span>
+              <span class="loading loading-spinner loading-xs hidden"></span>
+            </button>
+          </div>
+        </div>
       </form>
     </section>
 

@@ -163,3 +163,15 @@ class GenerationRequestSerializer(serializers.Serializer):
         min_length=1
     )
     noise = serializers.IntegerField(min_value=0, max_value=100, default=0)
+
+
+class FinetuneRequestSerializer(serializers.Serializer):
+    batch_id = serializers.CharField(help_text="ID returned by the preview generation step.")
+    object_type = serializers.CharField(help_text="Target object type for fine-tuning.")
+    # Optional: allow selecting a subset of images (absolute or media-relative paths)
+    selected_paths = serializers.ListField(
+        child=serializers.CharField(),
+        required=False,
+        allow_empty=True,
+        help_text="Optional subset of image file paths to use for fine-tuning.",
+    )

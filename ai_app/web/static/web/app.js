@@ -4,6 +4,12 @@
   const generateBtnLabel = generateBtn?.querySelector(".btn-label");
   const generateBtnSpinner = generateBtn?.querySelector(".loading-spinner");
   const generateMessage = document.getElementById("generateMessage");
+  const previewSection = document.getElementById("previewSection");
+  const previewGrid = document.getElementById("previewGrid");
+  const startFinetuneBtn = document.getElementById("startFinetuneBtn");
+  const startFinetuneBtnLabel = startFinetuneBtn?.querySelector(".btn-label");
+  const startFinetuneBtnSpinner = startFinetuneBtn?.querySelector(".loading-spinner");
+  let lastPreview = null; // { batch_id, object_type, items: [{class, url, path}] }
   const genNumImages = document.getElementById("genNumImages");
   const genMaxObjects = document.getElementById("genMaxObjects");
   // Selected type comes from a single textbox now
@@ -58,7 +64,7 @@
           rotate: rotate,
           noise: parseFloat(noise)
         };
-        const resp = await fetch("/api/generate/", {
+        const resp = await fetch("/api/generate/preview/", {
           method: "POST",
           headers: withApiHeaders({
             "Content-Type": "application/json",
@@ -77,32 +83,31 @@
           const msg = formatApiError(data, text, resp.statusText);
           setMessage(generateMessage, `Error (${resp.status}): ${msg}`, 'error');
         } else {
-          setMessage(generateMessage, "Images generated and uploaded.", 'success');
-          // Show all results
-          if (data.results) {
-            resultsList.innerHTML = "";
-            data.results.forEach(r => {
-              if (r.result) resultsList.insertAdjacentHTML("beforeend", resultItemHTML(r.result, csrf));
+          setMessage(generateMessage, "Preview generated. Review images below.", 'success');
+          // Render preview grid
+          if (previewSection && previewGrid && Array.isArray(data?.items)) {
+            lastPreview = { batch_id: data.batch_id, object_type: data.object_type, items: data.items };
+            previewGrid.innerHTML = "";
+            data.items.forEach((item, idx) => {
+              const id = `pv-${idx}`;
+              const label = item.class === 'others' ? 'negative' : 'positive';
+              previewGrid.insertAdjacentHTML('beforeend', `
+                <label class="card border border-base-300 rounded-lg overflow-hidden cursor-pointer">
+                  <figure class="aspect-[4/3] bg-base-200">
+                    <img src="${item.url}" alt="${label}" class="w-full h-full object-cover" />
+                  </figure>
+                  <div class="card-body p-3">
+                    <div class="form-control">
+                      <label class="label cursor-pointer justify-start gap-2">
+                        <input type="checkbox" class="checkbox checkbox-sm" id="${id}" data-path="${item.path}" checked>
+                        <span class="label-text text-sm">Use for training (${label})</span>
+                      </label>
+                    </div>
+                  </div>
+                </label>
+              `);
             });
-          }
-          // Lock Upload section object type to the generated type and disable it
-          const objectTypeSelect = document.getElementById("objectType");
-          if (objectTypeSelect) {
-            objectTypeSelect.innerHTML = "";
-            const opt = document.createElement("option");
-            opt.value = selectedType;
-            // Keep text simple; backend expects raw value
-            opt.textContent = selectedType;
-            objectTypeSelect.appendChild(opt);
-            objectTypeSelect.value = selectedType;
-            objectTypeSelect.disabled = true;
-          }
-          // Enable finetuned toggle if model now exists (backend returns finetuned_model_dir)
-          const toggle = document.getElementById("useFinetunedToggle");
-          const label = document.getElementById("useFinetunedLabel");
-          if (toggle && label && data && data.finetuned_model_dir) {
-            toggle.disabled = false;
-            label.textContent = "Use fine‑tuned (if available)";
+            previewSection.classList.remove('hidden');
           }
         }
       } catch (err) {
@@ -117,6 +122,58 @@
         }
         // persist message until next submit
         // Keep form values so the user can adjust parameters; do not auto-reset
+      }
+    });
+  }
+
+  if (startFinetuneBtn) {
+    startFinetuneBtn.addEventListener('click', async () => {
+      if (!lastPreview) return;
+      const csrf = getCSRF();
+      const checkboxes = Array.from(previewGrid.querySelectorAll('input[type="checkbox"][data-path]'));
+      const selected = checkboxes.filter(cb => cb.checked).map(cb => cb.getAttribute('data-path'));
+      startFinetuneBtn.disabled = true;
+      if (startFinetuneBtnLabel && startFinetuneBtnSpinner) {
+        startFinetuneBtnLabel.textContent = 'Fine‑tuning…';
+        startFinetuneBtnSpinner.classList.remove('hidden');
+      }
+      try {
+        const resp = await fetch('/api/generate/finetune/', {
+          method: 'POST',
+          headers: withApiHeaders({
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrf,
+          }),
+          body: JSON.stringify({
+            batch_id: lastPreview.batch_id,
+            object_type: lastPreview.object_type,
+            selected_paths: selected,
+          }),
+        });
+        const text = await resp.text();
+        let data = null;
+        try { data = text ? JSON.parse(text) : null; } catch (_) {}
+        if (!resp.ok) {
+          const msg = formatApiError(data, text, resp.statusText);
+          showToast(`Fine‑tuning failed: ${msg}`, 'error', 10000);
+        } else {
+          showToast('Fine‑tuning complete. You can now use the finetuned classifier.', 'success', 6000);
+          // Enable finetuned toggle
+          const toggle = document.getElementById('useFinetunedToggle');
+          const label = document.getElementById('useFinetunedLabel');
+          if (toggle && label) {
+            toggle.disabled = false;
+            label.textContent = 'Use fine‑tuned (if available)';
+          }
+        }
+      } catch (e) {
+        showToast(`Fine‑tuning failed: ${e}`, 'error', 10000);
+      } finally {
+        startFinetuneBtn.disabled = false;
+        if (startFinetuneBtnLabel && startFinetuneBtnSpinner) {
+          startFinetuneBtnLabel.textContent = 'Start fine‑tuning';
+          startFinetuneBtnSpinner.classList.add('hidden');
+        }
       }
     });
   }

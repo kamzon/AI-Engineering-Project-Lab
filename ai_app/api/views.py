@@ -23,6 +23,8 @@ import sys
 import random
 import io
 import requests
+import uuid
+from pathlib import Path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../')))
 from image_generation import generate_image_with_api, augment_image, OBJECT_TYPES, BACKGROUND_TYPES, API_KEY, API_UPLOAD_ENDPOINT, API_CORRECT_ENDPOINT
 # --- Generation API Endpoint ---
@@ -213,7 +215,13 @@ class CorrectionView(APIView):
 
     
 class GenerateView(APIView):
-    """Generate images, then fine-tune the ResNet classifier using few-shot on them."""
+    """Generate images, then fine-tune the ResNet classifier using few-shot on them.
+
+    NOTE: This legacy endpoint performs both steps in one request. We'll keep it
+    for backward compatibility, but new UI should use the split endpoints:
+    - POST /api/generate/preview/
+    - POST /api/generate/finetune/
+    """
 
     @extend_schema(
         summary="Generate image with specified objects",
@@ -327,6 +335,152 @@ class GenerateView(APIView):
             "negatives": len(negative_paths),
             "finetuned_model_dir": finetuned_dir
         }, status=201)
+
+
+class GeneratePreviewView(APIView):
+    """Generate images and return preview URLs and a batch_id; do NOT finetune."""
+
+    @extend_schema(
+        summary="Generate preview images",
+        description=(
+            "Generates positive and negative images for a target object and returns preview URLs "
+            "along with a batch_id to be used to start fine-tuning later."
+        ),
+        request=".serializers.GenerationRequestSerializer",
+        responses={200: OpenApiResponse(description="Preview generated")},
+        tags=["Generation"],
+    )
+    def post(self, request):
+        from .serializers import GenerationRequestSerializer
+        input_serializer = GenerationRequestSerializer(data=request.data)
+        if not input_serializer.is_valid():
+            return Response(input_serializer.errors, status=400)
+
+        v = input_serializer.validated_data
+        num_images = v["num_images"]
+        num_objects_per_image = v["max_objects_per_image"]
+        object_types = list(v.get("object_types", []))
+        backgrounds = list(v.get("backgrounds", []))
+        blur_pct = int(v.get("blur", 0))
+        rotate_choices = v["rotate"]
+        noise_pct = int(v["noise"]) if v.get("noise") is not None else 0
+
+        batch_id = uuid.uuid4().hex
+        dataset_root = (settings.MEDIA_ROOT / "fewshot_previews" / batch_id)
+        pos_dir = dataset_root / object_types[0]
+        neg_dir = dataset_root / "others"
+        pos_dir.mkdir(parents=True, exist_ok=True)
+        neg_dir.mkdir(parents=True, exist_ok=True)
+
+        blur_radius = round((max(0, min(100, blur_pct)) / 100.0) * 10.0, 2)
+        positive_urls = []
+        negative_urls = []
+        positive_paths = []
+        negative_paths = []
+        items = []
+
+        for _ in range(num_images):
+            background = random.choice(backgrounds)
+            rotate = random.choice(rotate_choices)
+            # positive
+            pos_prompt = f"A {background} background with {num_objects_per_image} {object_types[0]}"
+            try:
+                img = generate_image_with_api(pos_prompt, api_key=API_KEY)
+                noise_std = round((max(0, min(100, noise_pct)) / 100.0) * 50.0, 2)
+                img = augment_image(img, blur=blur_radius, rotate=rotate, noise=noise_std)
+                if img is not None:
+                    fname = f"pos_{random.randint(100000,999999)}.png"
+                    p = pos_dir / fname
+                    img.save(p, format='PNG')
+                    positive_paths.append(str(p))
+                    url = settings.MEDIA_URL + str(p.relative_to(settings.MEDIA_ROOT)).replace(os.sep, "/")
+                    positive_urls.append(url)
+                    items.append({"class": object_types[0], "path": str(p), "url": url})
+            except Exception:
+                pass
+
+            # negative
+            neg_candidates = [o for o in ModelConstants.DEFAULT_CANDIDATE_LABELS if o != object_types[0]]
+            chosen = random.sample(neg_candidates, k=min(num_objects_per_image, len(neg_candidates)))
+            neg_prompt = f"A {background} background with " + ", ".join(chosen)
+            try:
+                img = generate_image_with_api(neg_prompt, api_key=API_KEY)
+                img = augment_image(img, blur=blur_radius, rotate=rotate, noise=noise_std)
+                if img is not None:
+                    fname = f"neg_{random.randint(100000,999999)}.png"
+                    p = neg_dir / fname
+                    img.save(p, format='PNG')
+                    negative_paths.append(str(p))
+                    url = settings.MEDIA_URL + str(p.relative_to(settings.MEDIA_ROOT)).replace(os.sep, "/")
+                    negative_urls.append(url)
+                    items.append({"class": "others", "path": str(p), "url": url})
+            except Exception:
+                pass
+
+        return Response({
+            "batch_id": batch_id,
+            "object_type": object_types[0],
+            "positives": len(positive_paths),
+            "negatives": len(negative_paths),
+            "items": items,
+        }, status=200)
+
+
+class GenerateFinetuneView(APIView):
+    """Start fine-tuning from a previously generated preview batch."""
+
+    @extend_schema(
+        summary="Start fine-tuning from preview batch",
+        request=".serializers.FinetuneRequestSerializer",
+        responses={200: OpenApiResponse(description="Fine-tuning started and finished (synchronous)")},
+        tags=["Generation"],
+    )
+    def post(self, request):
+        from .serializers import FinetuneRequestSerializer
+        s = FinetuneRequestSerializer(data=request.data)
+        if not s.is_valid():
+            return Response(s.errors, status=400)
+
+        v = s.validated_data
+        batch_id = v["batch_id"]
+        object_type = v["object_type"]
+        selected_paths = v.get("selected_paths")
+
+        dataset_root = settings.MEDIA_ROOT / "fewshot_previews" / batch_id
+        if not dataset_root.exists():
+            return Response({"detail": "Invalid batch_id"}, status=400)
+
+        # Collect images
+        if selected_paths:
+            image_paths = [str(Path(p)) for p in selected_paths]
+        else:
+            # default: use all from this batch
+            image_paths = []
+            for p in (dataset_root / object_type).glob("*.png"):
+                image_paths.append(str(p))
+            for p in (dataset_root / "others").glob("*.png"):
+                image_paths.append(str(p))
+
+        if not image_paths:
+            return Response({"detail": "No images to fine-tune on."}, status=400)
+
+        try:
+            trainer = FewShotResNet(object_type=object_type)
+            trainer.load_data_from_paths(image_paths=image_paths, test_size=0.2)
+            trainer.finetune(
+                num_train_epochs=ModelConstants.FEW_SHOT_MAX_EPOCHS,
+                per_device_batch_size=ModelConstants.FEW_SHOT_BATCH_SIZE,
+            )
+            finetuned_dir = ModelConstants.FINETUNED_MODEL_DIR
+        except Exception as e:
+            return Response({"detail": f"Fine-tuning failed: {e}"}, status=500)
+
+        return Response({
+            "batch_id": batch_id,
+            "object_type": object_type,
+            "finetuned_model_dir": finetuned_dir,
+            "num_images": len(image_paths),
+        }, status=200)
         
         
 @api_view(["POST"])
