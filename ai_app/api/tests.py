@@ -12,15 +12,26 @@ from pathlib import Path
 from unittest import mock
 
 
-def _make_test_image_file(name: str = "test.png", size=(64, 64)) -> SimpleUploadedFile:
-    """Create an in-memory PNG image file for upload tests."""
-    img = Image.new("RGB", size, color=(123, 222, 64))
-    buf = io.BytesIO()
-    img.save(buf, format="PNG")
-    buf.seek(0)
-    return SimpleUploadedFile(name, buf.getvalue(), content_type="image/png")
+BASE_INPUTS_DIR = (Path(__file__).resolve().parent.parent / "static" / "inputs")
 
 
+def _load_input_image(filename: str) -> SimpleUploadedFile:
+    path = BASE_INPUTS_DIR / filename
+    ext = path.suffix.lower()
+    if ext == ".png":
+        ctype = "image/png"
+    elif ext in {".jpg", ".jpeg"}:
+        ctype = "image/jpeg"
+    elif ext == ".webp":
+        ctype = "image/webp"
+    else:
+        ctype = "application/octet-stream"
+    with open(path, "rb") as f:
+        data = f.read()
+    return SimpleUploadedFile(path.name, data, content_type=ctype)
+
+
+@override_settings(API_STATIC_TOKEN="")
 class CorrectionViewTest(APITestCase):
     def setUp(self):
         # Minimal Result entry; image path field can be empty for this test
@@ -49,27 +60,41 @@ class CorrectionViewTest(APITestCase):
         response = self.client.post(self.url, data)
         self.assertEqual(response.status_code, 400)
 
+    def test_correction_blocked_for_unsafe(self):
+        # Mark the result as unsafe in status and meta
+        self.result.status = "unsafe"
+        self.result.meta = {"unsafe": True}
+        self.result.save()
+        data = {"result_id": self.result.id, "corrected_count": 5}
+        response = self.client.post(self.url, data)
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("Corrections are not allowed", response.data.get("detail", ""))
+
 
 class CountViewTest(APITestCase):
     def setUp(self):
         self.url = reverse("count")
 
+    @override_settings(API_STATIC_TOKEN="")
     def test_count_view_missing_fields(self):
         response = self.client.post(self.url, {})
         self.assertEqual(response.status_code, 400)
 
+    @override_settings(API_STATIC_TOKEN="")
     def test_count_view_missing_image(self):
         data = {"object_type": "cat"}
         response = self.client.post(self.url, data)
         self.assertEqual(response.status_code, 400)
 
+    @override_settings(API_STATIC_TOKEN="")
     def test_count_view_missing_object_type(self):
-        img_file = _make_test_image_file()
+        img_file = _load_input_image("cat.png")
         data = {"image": img_file}
         response = self.client.post(self.url, data, format="multipart")
         self.assertEqual(response.status_code, 400)
 
     @patch("pipeline.pipeline.Pipeline.run")
+    @override_settings(API_STATIC_TOKEN="")
     def test_count_view_success(self, mock_run):
         # Prepare a temporary panoptic file so copying in the view succeeds
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -89,7 +114,7 @@ class CountViewTest(APITestCase):
                 },
             }
 
-            img_file = _make_test_image_file()
+            img_file = _load_input_image("cat.png")
             data = {"object_type": "cat", "image": img_file}
 
             # Isolate media writes to a temp directory
@@ -101,26 +126,26 @@ class CountViewTest(APITestCase):
         self.assertIn("predicted_count", response.data)
         self.assertEqual(response.data.get("predicted_count"), 3)
 
-    @mock.patch("pipeline.models.safety.SafetyFilter.is_safe")
-    def test_count_view_unsafe_single_image(self, mock_is_safe):
-        # Force safety filter to mark image as unsafe
-        mock_is_safe.return_value = (False, {"pred_label": "unsafe", "unsafe_prob": 0.9, "threshold": 0.5})
-        img_file = _make_test_image_file()
+    @override_settings(API_STATIC_TOKEN="")
+    def test_count_view_unsafe_single_image(self):
+        # Force the pipeline safety check to reject the image
+        img_file = _load_input_image("unsafe.jpg")
         data = {"object_type": "cat", "image": img_file}
 
         with tempfile.TemporaryDirectory() as tmpdir:
             with override_settings(MEDIA_ROOT=Path(tmpdir), MEDIA_URL="/media/"):
-                response = self.client.post(self.url, data, format="multipart")
+                with mock.patch("pipeline.pipeline.Pipeline._safety_check", return_value=(False, {"label": "unsafe", "confidence": 0.9, "threshold": 0.5}, 1.0)):
+                    response = self.client.post(self.url, data, format="multipart")
 
-        self.assertEqual(response.status_code, 400)
-        self.assertIn("error", response.data)
-        self.assertEqual(response.data.get("error"), "Image is unsafe; processing aborted.")
-        # Make sure a Result exists and is marked rejected
-        result = Result.objects.order_by("-id").first()
-        self.assertIsNotNone(result)
-        self.assertEqual(result.status, "rejected")
+        # View should still return 201 with a Result marked unsafe
+        self.assertEqual(response.status_code, 201)
+        self.assertIn("status", response.data)
+        self.assertEqual(response.data.get("status"), "unsafe")
+        self.assertIn("predicted_count", response.data)
+        self.assertEqual(response.data.get("predicted_count"), 0)
 
 
+@override_settings(API_STATIC_TOKEN="")
 class GenerateViewTest(APITestCase):
     def setUp(self):
         self.url = reverse("generate")
