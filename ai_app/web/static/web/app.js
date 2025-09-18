@@ -54,6 +54,12 @@
         generateBtnLabel.textContent = "Generating…";
         generateBtnSpinner.classList.remove("hidden");
       }
+      // Clear previous preview immediately
+      if (previewGrid) previewGrid.innerHTML = "";
+      if (previewSection) previewSection.classList.add('hidden');
+      lastPreview = null;
+      // Clear previous generate message
+      if (generateMessage) generateMessage.innerHTML = "";
       try {
         const payload = {
           num_images: parseInt(numImages, 10),
@@ -132,6 +138,10 @@
       const csrf = getCSRF();
       const checkboxes = Array.from(previewGrid.querySelectorAll('input[type="checkbox"][data-path]'));
       const selected = checkboxes.filter(cb => cb.checked).map(cb => cb.getAttribute('data-path'));
+      // Disable other actions during fine-tuning
+      const countBtn = document.getElementById('uploadBtn');
+      if (generateBtn) generateBtn.disabled = true;
+      if (countBtn) countBtn.disabled = true;
       startFinetuneBtn.disabled = true;
       if (startFinetuneBtnLabel && startFinetuneBtnSpinner) {
         startFinetuneBtnLabel.textContent = 'Fine‑tuning…';
@@ -165,10 +175,37 @@
             toggle.disabled = false;
             label.textContent = 'Use fine‑tuned (if available)';
           }
+          // Refresh object type dropdowns from backend
+          try {
+            const res2 = await fetch('/object-types/');
+            const objTypes = await res2.json();
+            const select = document.getElementById('objectType');
+            if (select && objTypes && Array.isArray(objTypes.default)) {
+              // Build default template
+              const defaultTpl = document.getElementById('defaultObjectTypesTpl');
+              const finetunedTpl = document.getElementById('finetunedObjectTypesTpl');
+              const toOptions = (arr) => arr.map(v => `<option value="${v}">${v.charAt(0).toUpperCase()+v.slice(1)}</option>`).join('');
+              if (defaultTpl) defaultTpl.innerHTML = toOptions(objTypes.default);
+              if (finetunedTpl) finetunedTpl.innerHTML = toOptions(objTypes.finetuned || []);
+              // If toggle is on and finetuned available, swap to finetuned list; else defaults
+              const useFinetunedToggle = document.getElementById('useFinetunedToggle');
+              select.innerHTML = '<option value="" disabled selected>Select type…</option>' + (useFinetunedToggle && useFinetunedToggle.checked && (objTypes.finetuned || []).length ? toOptions(objTypes.finetuned) : toOptions(objTypes.default));
+              // Try to keep current selection if it exists in the new list
+              const current = lastPreview.object_type || select.value;
+              const hasCurrent = Array.from(select.options).some(o => o.value === current);
+              if (hasCurrent) select.value = current;
+            }
+          } catch (_) {
+            // best effort; ignore refresh errors
+          }
         }
       } catch (e) {
         showToast(`Fine‑tuning failed: ${e}`, 'error', 10000);
       } finally {
+        // Re-enable buttons
+        const countBtn = document.getElementById('uploadBtn');
+        if (generateBtn) generateBtn.disabled = false;
+        if (countBtn) countBtn.disabled = false;
         startFinetuneBtn.disabled = false;
         if (startFinetuneBtnLabel && startFinetuneBtnSpinner) {
           startFinetuneBtnLabel.textContent = 'Start fine‑tuning';

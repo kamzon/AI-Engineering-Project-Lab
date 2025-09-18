@@ -2,7 +2,7 @@ from django.shortcuts import render
 from django.conf import settings
 from records.models import Result
 from django.http import JsonResponse, HttpResponseBadRequest
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_POST, require_GET
 from django.middleware.csrf import get_token
 from .models import ThemePreference
 import os
@@ -111,3 +111,15 @@ def set_theme(request):
     pref.theme = theme
     pref.save()
     return JsonResponse({"theme": pref.theme})
+
+
+@require_GET
+def object_types(request):
+    """Return default and finetuned object types for dynamic UI refresh."""
+    default_object_types = getattr(settings, "OBJECT_TYPES", [])
+    finetuned_types = _get_finetuned_object_types() or []
+    return JsonResponse({
+        "default": list(default_object_types),
+        "finetuned": finetuned_types,
+        "finetuned_available": bool(os.path.isdir(ModelConstants.FINETUNED_MODEL_DIR) and os.listdir(ModelConstants.FINETUNED_MODEL_DIR)),
+    })
