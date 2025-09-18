@@ -6,3 +6,6 @@
 | update unit tests to include the new changes and reach 74% coverage                                                                     | Haidar Chaito   |                                                                                                      | Completed  |
 | fix ci run of the unit tests and correctly display the coverage metric                                                                  | Haidar Chaito   |                                                                                                      | Completed  |
 | add visualization to masks with resnet predictions and confidence level for each detection | Haidar Chaito   | [ticket 3](https://git.fim.uni-passau.de/aie/ai-engineering-lab/student-projects/group-1/-/issues/3) | Completed  |
+
+| training CNN classifier for the safety filter  | Noureddine Kamzon   |  | Completed  |
+| work on the backend security  | Noureddine Kamzon   |  | Completed  |
