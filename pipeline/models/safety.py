@@ -4,13 +4,19 @@ import torch.nn.functional as F
 
 
 class SimpleCNN(nn.Module):
-    def __init__(self, num_classes=2):
+    def __init__(self, num_classes=2, base_channels: int = 32):
         super(SimpleCNN, self).__init__()
         
-        self.conv1 = nn.Conv2d(3, 32, kernel_size=3, stride=1, padding=1)
+        # allow constructing with different channel configs to match checkpoints
+        self.base_channels = base_channels
+        c1 = self.base_channels
+        c2 = self.base_channels * 2
+        c3 = self.base_channels * 4
+        
+        self.conv1 = nn.Conv2d(3, c1, kernel_size=3, stride=1, padding=1)
         self.pool = nn.MaxPool2d(2, 2)
-        self.conv2 = nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1)
-        self.conv3 = nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1)
+        self.conv2 = nn.Conv2d(c1, c2, kernel_size=3, stride=1, padding=1)
+        self.conv3 = nn.Conv2d(c2, c3, kernel_size=3, stride=1, padding=1)
         
         # placeholder, will replace dynamically
         self.fc1 = None  
@@ -51,7 +57,6 @@ class SimpleCNN(nn.Module):
 
 
 def load_safety_model(model_path: str, device: str):
-    model = SimpleCNN(num_classes=2)
     checkpoint = torch.load(model_path, map_location=device)
 
     # Handle state_dict wrapping
@@ -59,7 +64,19 @@ def load_safety_model(model_path: str, device: str):
     new_state = {}
     for k, v in state.items():
         new_state[k.replace("module.", "")] = v
+
+    # Detect base channel size from checkpoint conv1 if available
+    base_channels = 32
+    try:
+        conv1_w = new_state.get("conv1.weight")
+        if isinstance(conv1_w, torch.Tensor) and conv1_w.ndim == 4:
+            # shape: [out_channels, in_channels, kH, kW]
+            base_channels = int(conv1_w.shape[0])
+    except Exception:
+        pass
+
+    model = SimpleCNN(num_classes=2, base_channels=base_channels)
     model.load_state_dict(new_state, strict=False)
     model.to(device).eval()
-    print("✅ Safety filter model loaded")
+    print(f"✅ Safety filter model loaded (base_channels={base_channels})")
     return model

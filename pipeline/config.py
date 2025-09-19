@@ -6,7 +6,7 @@ from pathlib import Path
 class ModelConstants:
     # GroundingDINO configuration
     GROUNDING_DINO_MODEL_ID: str = "IDEA-Research/grounding-dino-base"
-    GROUNDING_BOX_THRESHOLD: float = 0.1
+    GROUNDING_BOX_THRESHOLD: float = 0.35
     GROUNDING_TEXT_THRESHOLD: float = 0.1
 
     IMAGE_MODEL_ID: str = "microsoft/resnet-50"
